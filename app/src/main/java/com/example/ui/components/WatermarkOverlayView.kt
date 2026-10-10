@@ -51,7 +51,7 @@ fun WatermarkOverlayView(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x550F172A)) // High transparency (~33% opacity)
+            .background(Color(0x3D0F172A)) // Ultra transparency (~24% opacity)
             .border(1.2.dp, borderColor, RoundedCornerShape(16.dp))
             .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
@@ -88,18 +88,28 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(3.dp))
+                val isTimeFake = locationData.securityResult.isTimeManipulated
+                val isTampered = isMock || isTimeFake
+                val badgeText = when {
+                    isTimeFake && isMock -> "⚠️ WAKTU & GPS PALSU"
+                    isTimeFake -> "⚠️ JAM DIMANIPULASI"
+                    isMock -> "⚠️ FAKE GPS"
+                    else -> "🛡️ ASLI TERVERIFIKASI"
+                }
+
                 // Mini Authenticity Badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(if (isMock) Color(0xCC7F1D1D) else Color(0xCC064E3B))
+                        .background(if (isTampered) Color(0xCC7F1D1D) else Color(0xCC064E3B))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = if (isMock) "⚠️ FAKE GPS" else "🛡️ ASLI VERIF",
-                        color = if (isMock) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.Bold
+                        text = badgeText,
+                        color = if (isTampered) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
             }
@@ -140,12 +150,14 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                val stampText = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED"
                 Text(
-                    text = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED",
+                    text = stampText,
                     color = Color(0xFFCBD5E1),
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

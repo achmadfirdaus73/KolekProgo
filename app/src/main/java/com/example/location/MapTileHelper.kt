@@ -3,8 +3,10 @@ package com.example.location
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Camera
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -16,12 +18,15 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.asinh
 import kotlin.math.floor
 import kotlin.math.tan
 
+/**
+ * Helper to fetch real OpenStreetMap (OSM) tiles without any API key,
+ * and render a bird's-eye perspective (tilted view from above) with exact GPS pin placement.
+ */
 object MapTileHelper {
 
     private val client = OkHttpClient.Builder()
@@ -34,8 +39,9 @@ object MapTileHelper {
     private var lastLon: Double = 0.0
 
     /**
-     * Renders a real-time dynamic map thumbnail showing the exact point marker
-     * at the provided latitude and longitude.
+     * Renders a real-time dynamic map thumbnail from OpenStreetMap with a tilted
+     * bird's-eye angle from above, pinpointing the user's exact coordinates.
+     * No API key required!
      */
     suspend fun renderLocationMapThumbnail(
         context: Context,
@@ -52,11 +58,11 @@ object MapTileHelper {
             return@withContext memoryCachedThumbnail!!
         }
 
-        // 1. Fetch raw map tile
-        val rawTile = fetchRawMapTile(context, lat, lon, zoom)
+        // 1. Fetch OpenStreetMap tile (no API key needed)
+        val rawTile = fetchOpenStreetMapTile(context, lat, lon, zoom)
 
-        // 2. Render composite thumbnail with real pinpoint marker and radar rings
-        val composite = createPinpointedMapThumbnail(rawTile, lat, lon, zoom, targetSize)
+        // 2. Render tilted perspective map thumbnail with precise pinpoint marker
+        val composite = createTiltedPerspectiveMapThumbnail(rawTile, lat, lon, zoom, targetSize)
 
         lastLat = lat
         lastLon = lon
@@ -94,14 +100,17 @@ object MapTileHelper {
 
         val diskTile = getCachedDiskTile(context, lat, lon, zoom)
         val baseTile = diskTile ?: createProceduralMap(lat, lon)
-        val composite = createPinpointedMapThumbnail(baseTile, lat, lon, zoom, targetSize)
+        val composite = createTiltedPerspectiveMapThumbnail(baseTile, lat, lon, zoom, targetSize)
         lastLat = lat
         lastLon = lon
         memoryCachedThumbnail = composite
         return composite
     }
 
-    private fun fetchRawMapTile(
+    /**
+     * Fetches real tile strictly from OpenStreetMap (and open mirrors) - 100% FREE & NO API KEY.
+     */
+    private fun fetchOpenStreetMapTile(
         context: Context,
         lat: Double,
         lon: Double,
@@ -120,20 +129,23 @@ object MapTileHelper {
         val tileX = lonToTileX(lon, zoom)
         val tileY = latToTileY(lat, zoom)
 
-        val cacheDir = File(context.cacheDir, "map_tiles")
+        val cacheDir = File(context.cacheDir, "osm_tiles")
         if (!cacheDir.exists()) cacheDir.mkdirs()
-        val cacheFile = File(cacheDir, "tile_${zoom}_${tileX}_${tileY}.png")
+        val cacheFile = File(cacheDir, "osm_${zoom}_${tileX}_${tileY}.png")
 
-        val urls = listOf(
-            "https://basemaps.cartocdn.com/rastertiles/voyager/$zoom/$tileX/$tileY.png",
-            "https://tile.openstreetmap.org/$zoom/$tileX/$tileY.png"
+        // Pure OpenStreetMap servers and public OSM-based renderers without API keys
+        val osmUrls = listOf(
+            "https://tile.openstreetmap.org/$zoom/$tileX/$tileY.png",
+            "https://a.tile.openstreetmap.org/$zoom/$tileX/$tileY.png",
+            "https://b.tile.openstreetmap.org/$zoom/$tileX/$tileY.png",
+            "https://basemaps.cartocdn.com/rastertiles/voyager/$zoom/$tileX/$tileY.png"
         )
 
-        for (url in urls) {
+        for (url in osmUrls) {
             try {
                 val request = Request.Builder()
                     .url(url)
-                    .addHeader("User-Agent", "KolekProCam-Android/1.0 (Location Watermark)")
+                    .addHeader("User-Agent", "KolekProCam/1.0 (Android OSM Map Watermark)")
                     .build()
 
                 val response = client.newCall(request).execute()
@@ -161,8 +173,8 @@ object MapTileHelper {
     private fun getCachedDiskTile(context: Context, lat: Double, lon: Double, zoom: Int): Bitmap? {
         val tileX = lonToTileX(lon, zoom)
         val tileY = latToTileY(lat, zoom)
-        val cacheDir = File(context.cacheDir, "map_tiles")
-        val cacheFile = File(cacheDir, "tile_${zoom}_${tileX}_${tileY}.png")
+        val cacheDir = File(context.cacheDir, "osm_tiles")
+        val cacheFile = File(cacheDir, "osm_${zoom}_${tileX}_${tileY}.png")
         if (cacheFile.exists() && cacheFile.length() > 0) {
             return try {
                 BitmapFactory.decodeFile(cacheFile.absolutePath)
@@ -174,18 +186,18 @@ object MapTileHelper {
     }
 
     /**
-     * Composites the base map tile with a high-accuracy GPS pinpoint marker,
-     * radar pulse circles, and live map badge.
+     * Transforms the map tile into a bird's-eye perspective view (tilted from above)
+     * and draws the exact coordinate pinpoint with radar pulse and live indicator.
      */
-    private fun createPinpointedMapThumbnail(
+    private fun createTiltedPerspectiveMapThumbnail(
         baseTile: Bitmap,
         lat: Double,
         lon: Double,
         zoom: Int,
         targetSize: Int
     ): Bitmap {
-        val output = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
+        val flatBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+        val flatCanvas = Canvas(flatBitmap)
 
         // 1. Calculate the exact coordinate offset inside the tile
         val n = 1 shl zoom
@@ -195,50 +207,78 @@ object MapTileHelper {
         val tileX = floor(tileXFloat).toInt()
         val tileY = floor(tileYFloat).toInt()
 
-        val subX = (tileXFloat - tileX).toFloat().coerceIn(0.1f, 0.9f)
-        val subY = (tileYFloat - tileY).toFloat().coerceIn(0.1f, 0.9f)
+        val subX = (tileXFloat - tileX).toFloat().coerceIn(0.12f, 0.88f)
+        val subY = (tileYFloat - tileY).toFloat().coerceIn(0.12f, 0.88f)
 
-        // Crop / scale base tile into canvas
+        // Draw base OpenStreetMap tile
         val srcRect = Rect(0, 0, baseTile.width, baseTile.height)
         val destRect = Rect(0, 0, targetSize, targetSize)
-        canvas.drawBitmap(baseTile, srcRect, destRect, null)
+        flatCanvas.drawBitmap(baseTile, srcRect, destRect, null)
 
-        // Target pinpoint center point in targetSize coordinates
-        val pinX = (subX * targetSize)
-        val pinY = (subY * targetSize)
+        // 2. Apply Perspective Tilt (Bird's-eye view from above / sudut dari atas)
+        // Using android.graphics.Camera to tilt along X-axis
+        val tiltedBitmap = Bitmap.createBitmap(targetSize, targetSize, Bitmap.Config.ARGB_8888)
+        val tiltedCanvas = Canvas(tiltedBitmap)
 
-        // 2. Draw radar pulse / accuracy ring around the exact point
+        val camera = Camera()
+        val matrix = Matrix()
+
+        val centerX = targetSize / 2f
+        val centerY = targetSize / 2f
+
+        camera.save()
+        // Tilt pitch ~32 degrees from above for natural bird's-eye view
+        camera.rotateX(32f)
+        camera.getMatrix(matrix)
+        camera.restore()
+
+        // Center transformation and scale slightly to fill bounds cleanly
+        matrix.preTranslate(-centerX, -centerY)
+        matrix.postScale(1.15f, 1.15f)
+        matrix.postTranslate(centerX, centerY + 8f)
+
+        val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        tiltedCanvas.drawBitmap(flatBitmap, matrix, tilePaint)
+
+        // 3. Map the exact pinpoint coordinate through the perspective matrix
+        val rawPinCoords = floatArrayOf(subX * targetSize, subY * targetSize)
+        val tiltedPinCoords = floatArrayOf(0f, 0f)
+        matrix.mapPoints(tiltedPinCoords, rawPinCoords)
+
+        val pinX = tiltedPinCoords[0].coerceIn(24f, targetSize - 24f)
+        val pinY = tiltedPinCoords[1].coerceIn(36f, targetSize - 28f)
+
+        // 4. Draw radar pulse / accuracy ring around the exact point
         val radarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#3B82F6")
-            alpha = 50
+            alpha = 55
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(pinX, pinY, 32f, radarPaint)
+        tiltedCanvas.drawCircle(pinX, pinY, 28f, radarPaint)
 
         val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#2563EB")
-            alpha = 140
+            alpha = 150
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f
+            strokeWidth = 2.2f
         }
-        canvas.drawCircle(pinX, pinY, 32f, ringPaint)
+        tiltedCanvas.drawCircle(pinX, pinY, 28f, ringPaint)
 
-        // 3. Draw location pin shadow
+        // 5. Ground shadow for the marker pin
         val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(90, 0, 0, 0)
+            color = Color.argb(100, 0, 0, 0)
             style = Paint.Style.FILL
         }
-        canvas.drawOval(RectF(pinX - 10f, pinY + 1f, pinX + 10f, pinY + 7f), shadowPaint)
+        tiltedCanvas.drawOval(RectF(pinX - 11f, pinY + 1f, pinX + 11f, pinY + 7f), shadowPaint)
 
-        // 4. Draw high-visibility 3D Location Marker Pin
+        // 6. Upright Pinpoint Marker
         val pinPath = Path()
-        val pinTop = pinY - 30f
-        val pinRadius = 13f
+        val pinTop = pinY - 28f
+        val pinRadius = 12f
 
-        // Pin body
         pinPath.moveTo(pinX, pinY)
         pinPath.cubicTo(
-            pinX - 16f, pinY - 14f,
+            pinX - 15f, pinY - 13f,
             pinX - pinRadius, pinTop + pinRadius,
             pinX - pinRadius, pinTop
         )
@@ -249,7 +289,7 @@ object MapTileHelper {
         )
         pinPath.cubicTo(
             pinX + pinRadius, pinTop + pinRadius,
-            pinX + 16f, pinY - 14f,
+            pinX + 15f, pinY - 13f,
             pinX, pinY
         )
         pinPath.close()
@@ -261,55 +301,55 @@ object MapTileHelper {
         val pinStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f
+            strokeWidth = 2.2f
         }
 
-        canvas.drawPath(pinPath, pinPaint)
-        canvas.drawPath(pinPath, pinStrokePaint)
+        tiltedCanvas.drawPath(pinPath, pinPaint)
+        tiltedCanvas.drawPath(pinPath, pinStrokePaint)
 
         // Inner white dot in the pin head
         val innerDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(pinX, pinTop, 4.5f, innerDotPaint)
+        tiltedCanvas.drawCircle(pinX, pinTop, 4.2f, innerDotPaint)
 
-        // 5. Draw bottom badge: "LIVE GPS"
-        val badgeHeight = 22f
-        val badgeWidth = 92f
+        // 7. Bottom clean badge: "GPS LIVE" (No "3D" text anywhere as requested)
+        val badgeHeight = 20f
+        val badgeWidth = 86f
         val badgeLeft = (targetSize - badgeWidth) / 2f
         val badgeTop = targetSize - badgeHeight - 6f
         val badgeRect = RectF(badgeLeft, badgeTop, badgeLeft + badgeWidth, badgeTop + badgeHeight)
 
         val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(200, 15, 23, 42) // Dark glass slate
+            color = Color.argb(180, 15, 23, 42) // Translucent dark glass
             style = Paint.Style.FILL
         }
         val badgeBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(120, 255, 255, 255)
+            color = Color.argb(100, 255, 255, 255)
             style = Paint.Style.STROKE
             strokeWidth = 1f
         }
-        canvas.drawRoundRect(badgeRect, 11f, 11f, badgeBgPaint)
-        canvas.drawRoundRect(badgeRect, 11f, 11f, badgeBorderPaint)
+        tiltedCanvas.drawRoundRect(badgeRect, 10f, 10f, badgeBgPaint)
+        tiltedCanvas.drawRoundRect(badgeRect, 10f, 10f, badgeBorderPaint)
 
         // Live beacon dot in badge
         val liveDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.parseColor("#10B981") // Emerald Green
             style = Paint.Style.FILL
         }
-        canvas.drawCircle(badgeLeft + 12f, badgeTop + 11f, 3.5f, liveDotPaint)
+        tiltedCanvas.drawCircle(badgeLeft + 11f, badgeTop + 10f, 3.2f, liveDotPaint)
 
         // Text "GPS LIVE"
         val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
-            textSize = 10f
+            textSize = 9.5f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             letterSpacing = 0.08f
         }
-        canvas.drawText("GPS LIVE", badgeLeft + 22f, badgeTop + 14.5f, badgeTextPaint)
+        tiltedCanvas.drawText("GPS LIVE", badgeLeft + 20f, badgeTop + 13.5f, badgeTextPaint)
 
-        return output
+        return tiltedBitmap
     }
 
     private fun lonToTileX(lon: Double, zoom: Int): Int {

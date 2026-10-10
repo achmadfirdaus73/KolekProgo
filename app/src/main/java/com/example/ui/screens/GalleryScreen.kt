@@ -405,20 +405,27 @@ fun PhotoCardItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Security pill
-                    if (photo.isMockDetected) {
+                    // Security pill & Camera device tag
+                    val isTampered = photo.isMockDetected || photo.isTimeManipulated
+                    val pillText = when {
+                        photo.isTimeManipulated && photo.isMockDetected -> "⚠️ Waktu & GPS Palsu"
+                        photo.isTimeManipulated -> "⚠️ Jam Manipulasi"
+                        photo.isMockDetected -> "⚠️ Fake GPS"
+                        else -> "🛡️ Asli Verif"
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "⚠️ Fake GPS",
+                            text = pillText,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFDC2626)
+                            color = if (isTampered) Color(0xFFDC2626) else Color(0xFF059669)
                         )
-                    } else {
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "🛡️ Asli Verif",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF059669)
+                            text = " ${photo.cameraStyle.take(13)}",
+                            fontSize = 9.5.sp,
+                            color = Color(0xFF38BDF8),
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
@@ -542,6 +549,33 @@ fun PhotoDetailDialog(
                     fontFamily = FontFamily.Monospace,
                     color = Color.Gray
                 )
+                val detailSecText = when {
+                    photo.isTimeManipulated && photo.isMockDetected -> "⚠️ Waktu & GPS Palsu Terdeteksi"
+                    photo.isTimeManipulated -> "⚠️ Waktu Jam Perangkat Dimanipulasi"
+                    photo.isMockDetected -> "⚠️ Fake GPS Terdeteksi"
+                    else -> "🛡️ Waktu & Lokasi Asli Terverifikasi"
+                }
+                Text(
+                    text = detailSecText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (photo.isMockDetected || photo.isTimeManipulated) Color(0xFFDC2626) else Color(0xFF059669)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Kamera:  ${photo.cameraStyle}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0284C7)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "• 24mm ƒ/1.78 ISO 50 (EXIF Apple)",
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
 
                 if (photo.note.isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))

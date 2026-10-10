@@ -42,4 +42,16 @@ class ExampleRobolectricTest {
     assertNotNull(result.integrityHash)
     assertNotNull(result.signatureToken)
   }
+
+  @Test
+  fun `iphone photonic engine processes bitmap with apple color science`() {
+    val src = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
+    val processed = com.example.camera.IPhonePhotonicEngine.processBitmap(
+      src,
+      com.example.camera.IPhoneStyle.PHOTONIC_STANDARD
+    )
+    assertNotNull(processed)
+    assertEquals(100, processed.width)
+    assertEquals(100, processed.height)
+  }
 }

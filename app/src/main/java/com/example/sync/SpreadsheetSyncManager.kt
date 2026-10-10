@@ -55,10 +55,11 @@ class SpreadsheetSyncManager(private val context: Context) {
                 }
             }
 
-            val statusText = if (photo.isMockDetected) {
-                "PERINGATAN: FAKE GPS TERDETEKSI"
-            } else {
-                "ASLI TERVERIFIKASI"
+            val statusText = when {
+                photo.isTimeManipulated && photo.isMockDetected -> "PERINGATAN: WAKTU & GPS PALSU"
+                photo.isTimeManipulated -> "PERINGATAN: WAKTU DIMANIPULASI"
+                photo.isMockDetected -> "PERINGATAN: FAKE GPS TERDETEKSI"
+                else -> "ASLI TERVERIFIKASI"
             }
 
             val json = JSONObject().apply {
@@ -72,6 +73,9 @@ class SpreadsheetSyncManager(private val context: Context) {
                 put("longitude", photo.longitude)
                 put("status", statusText)
                 put("isMock", photo.isMockDetected)
+                put("isTimeManipulated", photo.isTimeManipulated)
+                put("deviceModel", photo.cameraStyle)
+                put("cameraSpecs", "Smart HDR 24mm f/1.8 High Clarity")
                 put("integrityHash", photo.integrityHash)
                 put("signatureToken", photo.signatureToken)
                 put("note", photo.note)

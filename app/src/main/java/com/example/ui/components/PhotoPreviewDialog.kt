@@ -63,6 +63,8 @@ import com.example.watermark.WatermarkResult
 fun PhotoPreviewDialog(
     watermarkResult: WatermarkResult,
     isMockDetected: Boolean,
+    isTimeManipulated: Boolean = false,
+    qualityMode: String = "Smart HDR",
     addressText: String,
     coordinatesText: String,
     isSyncing: Boolean,
@@ -190,32 +192,41 @@ fun PhotoPreviewDialog(
                             }
                         }
 
+                        val isTampered = isMockDetected || isTimeManipulated
+                        val chipTitle = when {
+                            isTimeManipulated && isMockDetected -> "WAKTU & GPS PALSU"
+                            isTimeManipulated -> "JAM DIMANIPULASI"
+                            isMockDetected -> "FAKE GPS DETECTED"
+                            else -> "LOKASI & JAM ASLI"
+                        }
+                        val chipSubtitle = if (isTampered) "Peringatan Integritas" else "Anti-Tamper Terverifikasi"
+
                         // Security Authenticity Chip
                         Box(
                             modifier = Modifier
                                 .weight(1.2f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (isMockDetected) Color(0xFF7F1D1D) else Color(0xFF064E3B))
+                                .background(if (isTampered) Color(0xFF7F1D1D) else Color(0xFF064E3B))
                                 .padding(8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = if (isMockDetected) Icons.Default.Warning else Icons.Default.Security,
+                                    imageVector = if (isTampered) Icons.Default.Warning else Icons.Default.Security,
                                     contentDescription = null,
-                                    tint = if (isMockDetected) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
+                                    tint = if (isTampered) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Column {
                                     Text(
-                                        text = if (isMockDetected) "FAKE GPS DETECTED" else "LOKASI ASLI VERIF",
-                                        color = if (isMockDetected) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
+                                        text = chipTitle,
+                                        color = if (isTampered) Color(0xFFFCA5A5) else Color(0xFF6EE7B7),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Anti-Tamper Live",
-                                        color = if (isMockDetected) Color(0xFFFECACA) else Color(0xFFA7F3D0),
+                                        text = chipSubtitle,
+                                        color = if (isTampered) Color(0xFFFECACA) else Color(0xFFA7F3D0),
                                         fontSize = 9.sp
                                     )
                                 }

@@ -9,9 +9,12 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
+import com.example.camera.PhotoQualityEngine
+import com.example.camera.PhotoQualityStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,26 +25,41 @@ object StorageHelper {
     suspend fun saveToInternalStorage(
         context: Context,
         jpegBytes: ByteArray,
-        tagLabel: String
+        tagLabel: String,
+        latitude: Double = 0.0,
+        longitude: Double = 0.0,
+        style: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
+        timestampMs: Long = System.currentTimeMillis()
     ): File = withContext(Dispatchers.IO) {
         val photosDir = File(context.filesDir, "kolekpro_photos")
         if (!photosDir.exists()) {
             photosDir.mkdirs()
         }
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date(timestampMs))
         val fileName = "${tagLabel}_TimeMark_${timestamp}_${System.currentTimeMillis()}.jpg"
         val file = File(photosDir, fileName)
         FileOutputStream(file).use { out ->
             out.write(jpegBytes)
             out.flush()
         }
+
+        // Inject calibrated camera EXIF metadata into the file
+        PhotoQualityEngine.injectCalibratedExif(
+            file = file,
+            latitude = latitude,
+            longitude = longitude,
+            style = style,
+            timestamp = timestampMs
+        )
+
         file
     }
 
     suspend fun exportToGallery(
         context: Context,
-        jpegBytes: ByteArray,
-        tagLabel: String
+        savedFile: File,
+        tagLabel: String,
+        style: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA
     ): Uri? = withContext(Dispatchers.IO) {
         try {
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
@@ -50,6 +68,9 @@ object StorageHelper {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
                 put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                if (style != PhotoQualityStyle.OFF) {
+                    put(MediaStore.Images.Media.DESCRIPTION, "KolekPro Geo-Verified • ${style.title}")
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/KolekPro")
                     put(MediaStore.Images.Media.IS_PENDING, 1)
@@ -60,9 +81,11 @@ object StorageHelper {
             val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
 
             if (uri != null) {
-                resolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(jpegBytes)
-                    stream.flush()
+                resolver.openOutputStream(uri)?.use { outputStream ->
+                    FileInputStream(savedFile).use { inputStream ->
+                        inputStream.copyTo(outputStream)
+                    }
+                    outputStream.flush()
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

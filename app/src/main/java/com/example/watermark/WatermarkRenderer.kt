@@ -10,6 +10,8 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import com.example.camera.PhotoQualityEngine
+import com.example.camera.PhotoQualityStyle
 import com.example.location.LiveLocationData
 import com.example.location.MapTileHelper
 import com.example.security.SecurityCheckResult
@@ -23,7 +25,9 @@ data class WatermarkConfig(
     val qualityPercentage: Int = 85,
     val maxDimension: Int = 1920,
     val showDynamicMap: Boolean = true,
-    val showSecurityToken: Boolean = true
+    val showSecurityToken: Boolean = true,
+    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
+    val iphoneStyle: PhotoQualityStyle = qualityStyle
 )
 
 data class WatermarkResult(
@@ -48,11 +52,14 @@ object WatermarkRenderer {
         // 1. Scale down if exceeds maxDimension
         val scaledSource = scaleBitmap(sourceBitmap, config.maxDimension)
 
-        // 2. Estimate uncompressed raw size
-        val originalRawSize = (scaledSource.width * scaledSource.height * 4).toLong()
+        // 2. Computational photography enhancement (Smart HDR tone curve, color science, micro-contrast clarity)
+        val enhanced = PhotoQualityEngine.processBitmap(scaledSource, config.qualityStyle)
 
-        // 3. Create mutable working bitmap
-        val outputBitmap = scaledSource.copy(Bitmap.Config.ARGB_8888, true)
+        // 3. Estimate uncompressed raw size
+        val originalRawSize = (enhanced.width * enhanced.height * 4).toLong()
+
+        // 4. Create mutable working bitmap
+        val outputBitmap = enhanced.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
 
         val width = outputBitmap.width.toFloat()
@@ -71,17 +78,18 @@ object WatermarkRenderer {
         val cardRight = cardLeft + cardWidth
         val cornerRadius = 24f * scale
 
-        // Background Card Paint - ELEGANT HIGH-TRANSPARENCY GLASS (~33% opacity)
+        // Background Card Paint - ULTRA-TRANSLUCENT FROSTED GLASS (~25% opacity)
         // Satisfies user requirement: "transparant watermarknya buat lebih transparant lagi"
         val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(85, 10, 18, 35) // Deep translucent navy glass
+            color = Color.argb(65, 10, 18, 35) // Deep ultra-translucent navy glass
             style = Paint.Style.FILL
         }
 
         // Subtle Card Border Stroke
+        val isTampered = securityResult.isMockDetected || securityResult.isTimeManipulated
         val cardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (securityResult.isMockDetected) {
-                Color.argb(160, 239, 68, 68) // Red border if fake
+            color = if (isTampered) {
+                Color.argb(160, 239, 68, 68) // Red border if fake GPS or manipulated time
             } else {
                 Color.argb(65, 255, 255, 255) // Thin subtle frosted glass stroke
             }
@@ -300,18 +308,26 @@ object WatermarkRenderer {
         scale: Float
     ) {
         val isMock = security.isMockDetected
+        val isTimeFake = security.isTimeManipulated
+        val isTampered = isMock || isTimeFake
+
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isMock) Color.argb(200, 127, 29, 29) else Color.argb(200, 6, 78, 59)
+            color = if (isTampered) Color.argb(210, 127, 29, 29) else Color.argb(200, 6, 78, 59)
             style = Paint.Style.FILL
         }
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isMock) Color.parseColor("#FCA5A5") else Color.parseColor("#6EE7B7")
-            textSize = 13f * scale
+            color = if (isTampered) Color.parseColor("#FCA5A5") else Color.parseColor("#6EE7B7")
+            textSize = 12f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
 
-        val label = if (isMock) "⚠️ FAKE GPS" else "🛡️ ASLI TERVERIFIKASI"
+        val label = when {
+            isTimeFake && isMock -> "⚠️ WAKTU & GPS PALSU"
+            isTimeFake -> "⚠️ WAKTU DIMANIPULASI"
+            isMock -> "⚠️ FAKE GPS"
+            else -> "🛡️ ASLI TERVERIFIKASI"
+        }
         val textWidth = textPaint.measureText(label)
         val pillHeight = 22f * scale
         val pillWidth = textWidth + (16f * scale)

@@ -16,6 +16,8 @@ data class PhotoRecord(
     val longitude: Double,
     val address: String,
     val isMockDetected: Boolean,
+    val isTimeManipulated: Boolean = false,
+    val cameraStyle: String = "Smart HDR",
     val integrityHash: String,
     val signatureToken: String,
     val note: String = "",
