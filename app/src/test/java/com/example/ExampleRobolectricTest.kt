@@ -48,7 +48,7 @@ class ExampleRobolectricTest {
     val src = android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888)
     val processed = com.example.camera.IPhonePhotonicEngine.processBitmap(
       src,
-      com.example.camera.IPhoneStyle.PHOTONIC_STANDARD
+      com.example.camera.PhotoQualityStyle.SMART_HDR_ULTRA
     )
     assertNotNull(processed)
     assertEquals(100, processed.width)
