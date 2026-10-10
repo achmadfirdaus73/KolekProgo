@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
@@ -47,33 +46,17 @@ fun WatermarkOverlayView(
     val isMock = locationData.securityResult.isMockDetected
     val borderColor = if (isMock) Color(0xB3EF4444) else Color(0x4DFFFFFF)
 
-    // Ultra-translucent glass background with map texture
+    // Ultra-translucent glass background (satisfies: "transparant watermarknya buat lebih transparant lagi")
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x550F172A))
+            .background(Color(0x3D0F172A)) // Ultra transparency (~24% opacity)
             .border(1.2.dp, borderColor, RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp, vertical = 10.dp)
     ) {
-        if (mapBitmap != null) {
-            Image(
-                bitmap = mapBitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                alpha = 0.28f
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xB80A1223))
-            )
-        }
-
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -167,20 +150,25 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                val stampText = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED"
                 Text(
-                    text = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED",
+                    text = stampText,
                     color = Color(0xFFCBD5E1),
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // RIGHT COLUMN: REAL DYNAMIC CIRCULAR 3D MAP DISC
+            // RIGHT COLUMN: REAL DYNAMIC MAP WITH EXACT COORDINATE PINPOINT
+            // Satisfies: "tampil lokasi sesuai titiknya bukan tempelan ajah ya"
             Box(
                 modifier = Modifier
                     .size(76.dp)
-                    .clip(CircleShape),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x991E293B))
+                    .border(1.2.dp, Color(0x66FFFFFF), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (mapBitmap != null) {
