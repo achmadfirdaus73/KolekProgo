@@ -150,14 +150,12 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                val stampText = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED"
                 Text(
-                    text = stampText,
+                    text = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED",
                     color = Color(0xFFCBD5E1),
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1
                 )
             }
 

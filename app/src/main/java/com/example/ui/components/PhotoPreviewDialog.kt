@@ -64,7 +64,6 @@ fun PhotoPreviewDialog(
     watermarkResult: WatermarkResult,
     isMockDetected: Boolean,
     isTimeManipulated: Boolean = false,
-    qualityMode: String = "Smart HDR",
     addressText: String,
     coordinatesText: String,
     isSyncing: Boolean,

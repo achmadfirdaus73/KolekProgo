@@ -10,8 +10,6 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import com.example.camera.PhotoQualityEngine
-import com.example.camera.PhotoQualityStyle
 import com.example.location.LiveLocationData
 import com.example.location.MapTileHelper
 import com.example.security.SecurityCheckResult
@@ -25,9 +23,7 @@ data class WatermarkConfig(
     val qualityPercentage: Int = 85,
     val maxDimension: Int = 1920,
     val showDynamicMap: Boolean = true,
-    val showSecurityToken: Boolean = true,
-    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
-    val iphoneStyle: PhotoQualityStyle = qualityStyle
+    val showSecurityToken: Boolean = true
 )
 
 data class WatermarkResult(
@@ -52,14 +48,11 @@ object WatermarkRenderer {
         // 1. Scale down if exceeds maxDimension
         val scaledSource = scaleBitmap(sourceBitmap, config.maxDimension)
 
-        // 2. Computational photography enhancement (Smart HDR tone curve, color science, micro-contrast clarity)
-        val enhanced = PhotoQualityEngine.processBitmap(scaledSource, config.qualityStyle)
+        // 2. Estimate uncompressed raw size
+        val originalRawSize = (scaledSource.width * scaledSource.height * 4).toLong()
 
-        // 3. Estimate uncompressed raw size
-        val originalRawSize = (enhanced.width * enhanced.height * 4).toLong()
-
-        // 4. Create mutable working bitmap
-        val outputBitmap = enhanced.copy(Bitmap.Config.ARGB_8888, true)
+        // 3. Create mutable working bitmap
+        val outputBitmap = scaledSource.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
 
         val width = outputBitmap.width.toFloat()

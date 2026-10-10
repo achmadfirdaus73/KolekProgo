@@ -125,7 +125,6 @@ fun MainContent(viewModel: MainViewModel) {
     val syncSuccessMessage by viewModel.syncSuccessMessage.collectAsState()
     val syncErrorMessage by viewModel.syncErrorMessage.collectAsState()
     val isSavedToGallery by viewModel.isSavedToGallery.collectAsState()
-    val iphoneStyle by viewModel.iphoneStyle.collectAsState()
 
     val pendingCount = remember(photos) {
         photos.count { it.syncStatus != PhotoRecord.SYNC_STATUS_SYNCED }
@@ -223,7 +222,6 @@ fun MainContent(viewModel: MainViewModel) {
                     watermarkResult = result,
                     isMockDetected = locationData.securityResult.isMockDetected,
                     isTimeManipulated = locationData.securityResult.isTimeManipulated,
-                    qualityMode = iphoneStyle.title,
                     addressText = locationData.address,
                     coordinatesText = "${locationData.latitude}, ${locationData.longitude}",
                     isSyncing = isSyncing,
