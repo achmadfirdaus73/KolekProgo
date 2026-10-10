@@ -280,7 +280,7 @@ fun GalleryScreen(
                 viewModel.syncSingleRecord(photo)
                 selectedPhoto = null
                 scope.launch {
-                    snackbarHostState.showSnackbar("Sedang menyinkronkan ke Spreadsheet...")
+                    snackbarHostState.showSnackbar("Sedang menyinkronkan data...")
                 }
             }
         )

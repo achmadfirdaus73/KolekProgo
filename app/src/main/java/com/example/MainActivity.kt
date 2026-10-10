@@ -23,7 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -55,7 +54,6 @@ import com.example.data.PhotoRecord
 import com.example.ui.components.PhotoPreviewDialog
 import com.example.ui.screens.CameraScreen
 import com.example.ui.screens.GalleryScreen
-import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.util.StorageHelper
 import java.io.File
@@ -194,28 +192,6 @@ fun MainContent(viewModel: MainViewModel) {
                     ),
                     modifier = Modifier.testTag("nav_tab_gallery")
                 )
-
-                // Tab 3: Spreadsheet & Pengaturan
-                NavigationBarItem(
-                    selected = activeTab == 2,
-                    onClick = { viewModel.setActiveTab(2) },
-                    icon = {
-                        Icon(
-                            Icons.Default.TableChart,
-                            contentDescription = "Spreadsheet",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    },
-                    label = { Text("Spreadsheet", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color(0xFF38BDF8),
-                        selectedTextColor = Color(0xFF38BDF8),
-                        indicatorColor = Color(0xFF1E293B),
-                        unselectedIconColor = Color(0xFF94A3B8),
-                        unselectedTextColor = Color(0xFF94A3B8)
-                    ),
-                    modifier = Modifier.testTag("nav_tab_settings")
-                )
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -234,13 +210,9 @@ fun MainContent(viewModel: MainViewModel) {
                     isCapturing = isCapturing,
                     onNavigateToGallery = { viewModel.setActiveTab(1) }
                 )
-                1 -> GalleryScreen(
+                else -> GalleryScreen(
                     viewModel = viewModel,
                     photos = photos
-                )
-                2 -> SettingsScreen(
-                    viewModel = viewModel,
-                    settings = settings
                 )
             }
 
@@ -258,9 +230,6 @@ fun MainContent(viewModel: MainViewModel) {
                     onRetake = { viewModel.dismissPreview() },
                     onSaveToGallery = { note ->
                         viewModel.saveToGalleryAndLocal(note)
-                    },
-                    onSyncToSpreadsheet = { note ->
-                        viewModel.syncCurrentPreviewToSpreadsheet(note)
                     },
                     onShare = {
                         val file = File(context.filesDir, "preview_share.jpg")

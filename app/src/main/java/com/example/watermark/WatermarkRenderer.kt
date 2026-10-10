@@ -2,18 +2,16 @@ package com.example.watermark
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import com.example.R
 import com.example.location.LiveLocationData
+import com.example.location.MapTileHelper
 import com.example.security.SecurityCheckResult
 import java.io.ByteArrayOutputStream
 import java.util.Locale
@@ -24,7 +22,7 @@ data class WatermarkConfig(
     val tagLabel: String = "KOLEKPRO",
     val qualityPercentage: Int = 85,
     val maxDimension: Int = 1920,
-    val show3DMapBadge: Boolean = true,
+    val showDynamicMap: Boolean = true,
     val showSecurityToken: Boolean = true
 )
 
@@ -44,7 +42,8 @@ object WatermarkRenderer {
         sourceBitmap: Bitmap,
         locationData: LiveLocationData,
         securityResult: SecurityCheckResult,
-        config: WatermarkConfig
+        config: WatermarkConfig,
+        customMapThumbnail: Bitmap? = null
     ): WatermarkResult {
         // 1. Scale down if exceeds maxDimension
         val scaledSource = scaleBitmap(sourceBitmap, config.maxDimension)
@@ -72,21 +71,22 @@ object WatermarkRenderer {
         val cardRight = cardLeft + cardWidth
         val cornerRadius = 24f * scale
 
-        // Background Card Paint (Translucent Dark Glass)
+        // Background Card Paint - ELEGANT HIGH-TRANSPARENCY GLASS (~33% opacity)
+        // Satisfies user requirement: "transparant watermarknya buat lebih transparant lagi"
         val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(220, 15, 23, 42) // #0F172A dark slate
+            color = Color.argb(85, 10, 18, 35) // Deep translucent navy glass
             style = Paint.Style.FILL
         }
 
         // Subtle Card Border Stroke
         val cardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (securityResult.isMockDetected) {
-                Color.argb(180, 239, 68, 68) // Red border if fake
+                Color.argb(160, 239, 68, 68) // Red border if fake
             } else {
-                Color.argb(80, 255, 255, 255) // White subtle glass stroke
+                Color.argb(65, 255, 255, 255) // Thin subtle frosted glass stroke
             }
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f * scale
+            strokeWidth = 2.0f * scale
         }
 
         val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
@@ -100,24 +100,46 @@ object WatermarkRenderer {
         val contentBottom = cardBottom - pad
         val contentRight = cardRight - pad
 
-        // --- RIGHT BADGE: 3D MAP BADGE ---
+        // --- RIGHT BADGE: REAL DYNAMIC MAP WITH EXACT COORDINATE PINPOINT ---
         var badgeLeft = contentRight
         val badgeSize = 150f * scale
-        if (config.show3DMapBadge) {
+        if (config.showDynamicMap) {
             badgeLeft = contentRight - badgeSize
             val badgeTop = contentTop + (cardHeight - pad * 2 - badgeSize) / 2f
-            draw3DMapBadge(context, canvas, badgeLeft, badgeTop, badgeSize, scale)
+
+            val mapThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
+                context = context,
+                lat = locationData.latitude,
+                lon = locationData.longitude,
+                zoom = 16,
+                targetSize = 256
+            )
+
+            drawDynamicPinpointMap(
+                canvas = canvas,
+                mapBitmap = mapThumbnail,
+                x = badgeLeft,
+                y = badgeTop,
+                size = badgeSize,
+                scale = scale
+            )
         }
 
         // --- LEFT COLUMN: Tag, Clock, Date ---
         val leftColWidth = 240f * scale
 
+        // Shadow paint for crystal-clear readability on any background photo
+        val shadowRadius = 4f * scale
+        val shadowDy = 2f * scale
+        val shadowColor = Color.argb(180, 0, 0, 0)
+
         // 1. Tag Label ("KOLEKPRO")
         val tagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#38BDF8") // Bright Sky Blue
+            color = Color.parseColor("#38BDF8") // Sky Blue
             textSize = 20f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             letterSpacing = 0.15f
+            setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
         canvas.drawText(
             config.tagLabel.uppercase(Locale.ROOT),
@@ -131,6 +153,7 @@ object WatermarkRenderer {
             color = Color.WHITE
             textSize = 58f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            setShadowLayer(shadowRadius * 1.5f, 0f, shadowDy * 1.5f, shadowColor)
         }
         val timeText = locationData.formattedTime.ifEmpty { "18:16" }
         canvas.drawText(
@@ -142,9 +165,10 @@ object WatermarkRenderer {
 
         // 3. Date ("10 Okt 2026")
         val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#CBD5E1") // Slate 300
+            color = Color.parseColor("#E2E8F0") // Slate 200
             textSize = 21f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
         val dateText = locationData.formattedDate.ifEmpty { "10 Okt 2026" }
         canvas.drawText(
@@ -167,7 +191,7 @@ object WatermarkRenderer {
         // Vertical Divider line between Left Column & Middle Address
         val dividerX = contentLeft + leftColWidth + 12f * scale
         val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(60, 255, 255, 255)
+            color = Color.argb(45, 255, 255, 255)
             strokeWidth = 1.5f * scale
         }
         canvas.drawLine(
@@ -180,7 +204,7 @@ object WatermarkRenderer {
 
         // --- MIDDLE COLUMN: Full Address & Coordinates ---
         val midLeft = dividerX + 18f * scale
-        val midRight = if (config.show3DMapBadge) badgeLeft - 16f * scale else contentRight
+        val midRight = if (config.showDynamicMap) badgeLeft - 16f * scale else contentRight
         val midWidth = max(midRight - midLeft, 100f)
 
         // 1. Multiline Address text
@@ -188,6 +212,7 @@ object WatermarkRenderer {
             color = Color.parseColor("#F8FAFC")
             textSize = 19f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
 
         val fullAddress = locationData.address.ifEmpty {
@@ -216,6 +241,7 @@ object WatermarkRenderer {
             color = Color.parseColor("#E2E8F0")
             textSize = 21f * scale
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
 
         val latStr = String.format(Locale.US, "%.6f", locationData.latitude).replace('.', ',')
@@ -231,9 +257,10 @@ object WatermarkRenderer {
 
         // 3. Mini Integrity Stamp
         val stampPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#94A3B8")
+            color = Color.parseColor("#CBD5E1")
             textSize = 13f * scale
             typeface = Typeface.MONOSPACE
+            setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
         val tokenText = "SIG: #${securityResult.signatureToken} • LIVE ENCRYPTED"
         canvas.drawText(
@@ -274,7 +301,7 @@ object WatermarkRenderer {
     ) {
         val isMock = security.isMockDetected
         val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isMock) Color.parseColor("#7F1D1D") else Color.parseColor("#064E3B")
+            color = if (isMock) Color.argb(200, 127, 29, 29) else Color.argb(200, 6, 78, 59)
             style = Paint.Style.FILL
         }
 
@@ -294,47 +321,38 @@ object WatermarkRenderer {
         canvas.drawText(label, x + (8f * scale), y + (15.5f * scale), textPaint)
     }
 
-    private fun draw3DMapBadge(
-        context: Context,
+    /**
+     * Draws the real dynamic pinpoint map thumbnail (never a static sticker).
+     */
+    private fun drawDynamicPinpointMap(
         canvas: Canvas,
+        mapBitmap: Bitmap,
         x: Float,
         y: Float,
         size: Float,
         scale: Float
     ) {
-        try {
-            val badgeBitmap = BitmapFactory.decodeResource(
-                context.resources,
-                R.drawable.ic_badge_3d_maps
-            )
-            if (badgeBitmap != null) {
-                val destRect = RectF(x, y, x + size, y + size)
-                // Draw white circular backing plate
-                val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = Color.WHITE
-                    style = Paint.Style.FILL
-                }
-                canvas.drawRoundRect(destRect, 16f * scale, 16f * scale, bgPaint)
-                canvas.drawBitmap(badgeBitmap, null, destRect, null)
-                return
-            }
-        } catch (_: Exception) {}
-
-        // Fallback procedural 3D map badge if asset loading fails
-        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#1E293B")
-            style = Paint.Style.FILL
-        }
         val destRect = RectF(x, y, x + size, y + size)
-        canvas.drawRoundRect(destRect, 12f * scale, 12f * scale, bgPaint)
+        val cornerRadius = 16f * scale
 
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#38BDF8")
-            textSize = 14f * scale
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
+        // Clip rounded rectangle for map thumbnail
+        canvas.save()
+        val clipPath = android.graphics.Path().apply {
+            addRoundRect(destRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
         }
-        canvas.drawText("3D MAPS", x + (size / 2f), y + (size / 2f) + 5f, textPaint)
+        canvas.clipPath(clipPath)
+
+        // Draw real map with exact pinpoint marker
+        canvas.drawBitmap(mapBitmap, null, destRect, null)
+        canvas.restore()
+
+        // Draw subtle glass border around thumbnail
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(120, 255, 255, 255)
+            style = Paint.Style.STROKE
+            strokeWidth = 2.0f * scale
+        }
+        canvas.drawRoundRect(destRect, cornerRadius, cornerRadius, borderPaint)
     }
 
     private fun scaleBitmap(bitmap: Bitmap, maxDim: Int): Bitmap {

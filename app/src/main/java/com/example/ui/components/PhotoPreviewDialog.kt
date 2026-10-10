@@ -71,7 +71,6 @@ fun PhotoPreviewDialog(
     isSavedToGallery: Boolean,
     onRetake: () -> Unit,
     onSaveToGallery: (note: String) -> Unit,
-    onSyncToSpreadsheet: (note: String) -> Unit,
     onShare: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -267,7 +266,7 @@ fun PhotoPreviewDialog(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // ACTION BUTTONS
                     Row(
@@ -279,7 +278,7 @@ fun PhotoPreviewDialog(
                             onClick = onRetake,
                             modifier = Modifier
                                 .weight(1f)
-                                .height(48.dp)
+                                .height(50.dp)
                                 .testTag("btn_retake"),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -295,12 +294,12 @@ fun PhotoPreviewDialog(
                             Text("Ulangi", fontSize = 13.sp)
                         }
 
-                        // Save to Gallery Button
+                        // Save Photo Button (Saves to gallery and auto-syncs silently)
                         Button(
                             onClick = { onSaveToGallery(noteText) },
                             modifier = Modifier
-                                .weight(1.3f)
-                                .height(48.dp)
+                                .weight(1.6f)
+                                .height(50.dp)
                                 .testTag("btn_save_gallery"),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
@@ -312,38 +311,31 @@ fun PhotoPreviewDialog(
                                 contentDescription = "Simpan",
                                 modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (isSavedToGallery) "Tersimpan" else "Ke Galeri", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                if (isSavedToGallery) "Tersimpan di Galeri" else "Simpan Foto",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
 
-                        // Send directly to Spreadsheet Button
-                        Button(
-                            onClick = { onSyncToSpreadsheet(noteText) },
-                            enabled = !isSyncing,
+                        // Share Button
+                        OutlinedButton(
+                            onClick = onShare,
                             modifier = Modifier
-                                .weight(1.4f)
-                                .height(48.dp)
-                                .testTag("btn_sync_spreadsheet"),
+                                .weight(0.9f)
+                                .height(50.dp)
+                                .testTag("btn_share_preview"),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF0D9488)
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF38BDF8)
                             )
                         ) {
-                            if (isSyncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.CloudUpload,
-                                    contentDescription = "Spreadsheet",
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Spreadsheet", fontSize = 13.sp)
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Bagikan",
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     }
                 }

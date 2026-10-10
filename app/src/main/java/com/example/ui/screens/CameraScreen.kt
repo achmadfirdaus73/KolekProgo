@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -23,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashAuto
@@ -76,6 +76,8 @@ fun CameraScreen(
     val lensFacing by viewModel.lensFacing.collectAsState()
     val flashMode by viewModel.flashMode.collectAsState()
     val gridEnabled by viewModel.gridEnabled.collectAsState()
+    val exposureBoost by viewModel.exposureBoost.collectAsState()
+    val currentMapThumbnail by viewModel.currentMapThumbnail.collectAsState()
 
     val isMock = locationData.securityResult.isMockDetected
 
@@ -85,10 +87,11 @@ fun CameraScreen(
             .background(Color.Black)
             .testTag("camera_screen")
     ) {
-        // 1. CAMERAX PREVIEW
+        // 1. CAMERAX PREVIEW (Using SurfaceView performance mode to eliminate dark/black screen)
         CameraPreviewView(
             lensFacing = lensFacing,
             flashMode = flashMode,
+            exposureBoostIndex = exposureBoost,
             onControllerReady = { controller ->
                 viewModel.cameraController = controller
             },
@@ -100,7 +103,7 @@ fun CameraScreen(
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val stepX = size.width / 3
                 val stepY = size.height / 3
-                val gridColor = Color(0x40FFFFFF)
+                val gridColor = Color(0x35FFFFFF)
 
                 drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(stepX, 0f), end = androidx.compose.ui.geometry.Offset(stepX, size.height), strokeWidth = 1f)
                 drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(stepX * 2, 0f), end = androidx.compose.ui.geometry.Offset(stepX * 2, size.height), strokeWidth = 1f)
@@ -109,17 +112,17 @@ fun CameraScreen(
             }
         }
 
-        // 3. TOP CONTROLS & STATUS BAR
+        // 3. TOP CONTROLS & STATUS BAR (Light gradient so camera is bright and clear)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color(0xCC000000), Color.Transparent)
+                        colors = listOf(Color(0x55000000), Color.Transparent)
                     )
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -151,17 +154,36 @@ fun CameraScreen(
                     }
                 }
 
-                // Camera Controls (Flash, Grid, Switch)
+                // Camera Controls (Exposure Brightness, Flash, Grid, Switch)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Brightness / Exposure Boost Toggle (+0, +2, +4)
+                    IconButton(
+                        onClick = { viewModel.cycleExposureBoost() },
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(
+                                if (exposureBoost > 0) Color(0xCCF59E0B) else Color(0x55000000),
+                                CircleShape
+                            )
+                            .testTag("btn_exposure_boost")
+                    ) {
+                        Icon(
+                            Icons.Default.Brightness6,
+                            contentDescription = "Pencerah Kamera",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
                     // Flash Mode Toggle
                     IconButton(
                         onClick = { viewModel.cycleFlashMode() },
                         modifier = Modifier
                             .size(38.dp)
-                            .background(Color(0x66000000), CircleShape)
+                            .background(Color(0x55000000), CircleShape)
                             .testTag("btn_flash_toggle")
                     ) {
                         val flashIcon = when (flashMode) {
@@ -177,7 +199,7 @@ fun CameraScreen(
                         onClick = { viewModel.toggleGrid() },
                         modifier = Modifier
                             .size(38.dp)
-                            .background(if (gridEnabled) Color(0x992563EB) else Color(0x66000000), CircleShape)
+                            .background(if (gridEnabled) Color(0x992563EB) else Color(0x55000000), CircleShape)
                             .testTag("btn_grid_toggle")
                     ) {
                         Icon(Icons.Default.GridOn, contentDescription = "Grid", tint = Color.White, modifier = Modifier.size(18.dp))
@@ -188,7 +210,7 @@ fun CameraScreen(
                         onClick = { viewModel.toggleLensFacing() },
                         modifier = Modifier
                             .size(38.dp)
-                            .background(Color(0x66000000), CircleShape)
+                            .background(Color(0x55000000), CircleShape)
                             .testTag("btn_switch_camera")
                     ) {
                         Icon(Icons.Default.Cameraswitch, contentDescription = "Ganti Kamera", tint = Color.White, modifier = Modifier.size(18.dp))
@@ -223,22 +245,23 @@ fun CameraScreen(
             }
         }
 
-        // 4. BOTTOM WATERMARK OVERLAY & SHUTTER PANEL
+        // 4. BOTTOM WATERMARK OVERLAY & SHUTTER PANEL (Subtle gradient, preserving viewfinder brightness)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color(0xEE000000))
+                        colors = listOf(Color.Transparent, Color(0x44000000))
                     )
                 )
                 .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
-            // Live Real-Time Watermark Overlay (replicating final rendered look)
+            // Live Real-Time Watermark Overlay (Showing real pinpoint map + high transparency)
             WatermarkOverlayView(
                 locationData = locationData,
                 tagLabel = settings.companyTag,
+                mapBitmap = currentMapThumbnail,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showTagDialog = true }
@@ -318,31 +341,31 @@ fun CameraScreen(
                         .size(46.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color(0x661E293B))
-                        .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(12.dp))
+                        .border(1.dp, Color(0x44FFFFFF), RoundedCornerShape(12.dp))
                         .clickable { onNavigateToGallery() }
-                        .testTag("btn_shortcut_gallery"),
+                        .testTag("btn_quick_gallery"),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = "Galeri",
+                        contentDescription = "Buka Riwayat",
                         tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
         }
     }
 
-    // Quick Tag Edit Dialog
+    // DIALOG QUICK EDIT TAG
     if (showTagDialog) {
         AlertDialog(
             onDismissRequest = { showTagDialog = false },
-            title = { Text("Ganti Label Unit / Usaha") },
+            title = { Text("Ubah Label Watermark") },
             text = {
                 Column {
                     Text(
-                        text = "Label ini akan ditampilkan pada watermark foto dan kolom unit di spreadsheet:",
+                        "Label ini akan dicetak di sudut watermark foto:",
                         fontSize = 13.sp,
                         color = Color.Gray
                     )
@@ -350,23 +373,21 @@ fun CameraScreen(
                     OutlinedTextField(
                         value = tempTag,
                         onValueChange = { tempTag = it },
-                        label = { Text("Label Tag (e.g. KOLEKPRO)") },
                         singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("input_quick_tag")
+                        placeholder = { Text("KOLEKPRO / NAMA TIM") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.updateCompanyTag(tempTag)
+                        val cleaned = tempTag.trim().ifEmpty { "KOLEKPRO" }
+                        viewModel.updateCompanyTag(cleaned)
                         showTagDialog = false
-                    },
-                    modifier = Modifier.testTag("btn_save_quick_tag")
+                    }
                 ) {
-                    Text("Simpan")
+                    Text("Terapkan")
                 }
             },
             dismissButton = {

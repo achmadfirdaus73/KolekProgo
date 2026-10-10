@@ -27,6 +27,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import android.graphics.Bitmap
+
 data class LiveLocationData(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
@@ -45,7 +47,8 @@ data class LiveLocationData(
         integrityHash = "INIT",
         signatureToken = "READY"
     ),
-    val hasGpsFix: Boolean = false
+    val hasGpsFix: Boolean = false,
+    val mapBitmap: Bitmap? = null
 )
 
 class LocationTracker(
@@ -143,6 +146,14 @@ class LocationTracker(
             val resolvedAddress = reverseGeocode(lat, lon)
             _locationData.value = _locationData.value.copy(
                 address = resolvedAddress
+            )
+        }
+
+        // Resolve real map tile for actual location coordinates
+        scope.launch {
+            val mapBmp = MapTileHelper.fetchLocationMapTile(context, lat, lon)
+            _locationData.value = _locationData.value.copy(
+                mapBitmap = mapBmp
             )
         }
     }

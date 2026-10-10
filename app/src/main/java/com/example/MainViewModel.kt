@@ -11,12 +11,14 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.config.AppConfig
 import com.example.data.AppDatabase
 import com.example.data.AppSettings
 import com.example.data.PhotoRecord
 import com.example.data.SettingsRepository
 import com.example.location.LiveLocationData
 import com.example.location.LocationTracker
+import com.example.location.MapTileHelper
 import com.example.sync.SpreadsheetSyncManager
 import com.example.sync.SyncResult
 import com.example.ui.components.CameraController
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +48,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val settings: StateFlow<AppSettings> = settingsRepo.settings
     val allPhotos: StateFlow<List<PhotoRecord>> = photoDao.getAllPhotos()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Real dynamic pinpoint map thumbnail
+    private val _currentMapThumbnail = MutableStateFlow<Bitmap?>(null)
+    val currentMapThumbnail: StateFlow<Bitmap?> = _currentMapThumbnail.asStateFlow()
 
     // UI States
     private val _capturedResult = MutableStateFlow<WatermarkResult?>(null)
@@ -77,6 +84,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _gridEnabled = MutableStateFlow(false)
     val gridEnabled: StateFlow<Boolean> = _gridEnabled.asStateFlow()
 
+    // Exposure boost level (0, 2, 4) to brighten dark camera
+    private val _exposureBoost = MutableStateFlow(0)
+    val exposureBoost: StateFlow<Int> = _exposureBoost.asStateFlow()
+
     private val _selectedPhotoDetail = MutableStateFlow<PhotoRecord?>(null)
     val selectedPhotoDetail: StateFlow<PhotoRecord?> = _selectedPhotoDetail.asStateFlow()
 
@@ -84,6 +95,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         locationTracker.startTracking()
+
+        // Observe location updates and dynamically generate the real map thumbnail with pinpoint
+        viewModelScope.launch(Dispatchers.IO) {
+            locationData.collectLatest { loc ->
+                try {
+                    val bmp = MapTileHelper.renderLocationMapThumbnail(
+                        context = getApplication(),
+                        lat = loc.latitude,
+                        lon = loc.longitude,
+                        zoom = 16,
+                        targetSize = 256
+                    )
+                    _currentMapThumbnail.value = bmp
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     override fun onCleared() {
@@ -113,6 +140,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleGrid() {
         _gridEnabled.value = !_gridEnabled.value
+    }
+
+    fun cycleExposureBoost() {
+        _exposureBoost.value = when (_exposureBoost.value) {
+            0 -> 2
+            2 -> 4
+            else -> 0
+        }
+        cameraController?.boostExposure(_exposureBoost.value)
     }
 
     fun setSelectedPhotoDetail(photo: PhotoRecord?) {
@@ -162,16 +198,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tagLabel = currentSettings.companyTag,
                 qualityPercentage = currentSettings.compressionQuality,
                 maxDimension = maxDim,
-                show3DMapBadge = true,
+                showDynamicMap = true,
                 showSecurityToken = true
             )
+
+            val currentMap = _currentMapThumbnail.value
 
             val result = WatermarkRenderer.applyWatermarkAndCompress(
                 context = getApplication(),
                 sourceBitmap = sourceBitmap,
                 locationData = currentLoc,
                 securityResult = currentLoc.securityResult,
-                config = config
+                config = config,
+                customMapThumbnail = currentMap
             )
 
             _capturedResult.value = result
@@ -221,8 +260,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val insertedId = photoDao.insert(record)
             val savedRecord = record.copy(id = insertedId)
 
-            // 4. Auto sync if enabled
-            if (currentSettings.autoSyncOnSave && currentSettings.spreadsheetUrl.isNotBlank()) {
+            // 4. Auto sync in background if configured in AppConfig or settings
+            val hasSpreadsheet = AppConfig.isSpreadsheetConfigured() || currentSettings.spreadsheetUrl.isNotBlank()
+            if (currentSettings.autoSyncOnSave && hasSpreadsheet) {
                 syncSingleRecord(savedRecord)
             }
         }
@@ -230,10 +270,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun syncCurrentPreviewToSpreadsheet(note: String) {
         val result = _capturedResult.value ?: return
-        val currentSettings = settings.value
+        if (_isSyncing.value) return
 
-        if (currentSettings.spreadsheetUrl.isBlank()) {
-            _syncErrorMessage.value = "URL Spreadsheet belum diisi di Pengaturan"
+        val currentLoc = locationData.value
+        val currentSettings = settings.value
+        val isConfigured = AppConfig.isSpreadsheetConfigured() || currentSettings.spreadsheetUrl.isNotBlank()
+
+        if (!isConfigured) {
+            _syncErrorMessage.value = "URL Spreadsheet belum diset di AppConfig.kt"
             return
         }
 
@@ -242,9 +286,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _syncErrorMessage.value = null
 
         viewModelScope.launch(Dispatchers.IO) {
-            val currentLoc = locationData.value
-
-            // Make sure file is also saved internally
+            // Save locally first if not saved
             val internalFile = StorageHelper.saveToInternalStorage(
                 getApplication(),
                 result.jpegBytes,
@@ -268,39 +310,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 syncStatus = PhotoRecord.SYNC_STATUS_PENDING
             )
 
-            val id = photoDao.insert(record)
-            val insertedRecord = record.copy(id = id)
+            val insertedId = photoDao.insert(record)
+            val savedRecord = record.copy(id = insertedId)
 
-            when (val syncRes = syncManager.sendPhotoRecord(insertedRecord, currentSettings)) {
-                is SyncResult.Success -> {
-                    _syncSuccessMessage.value = syncRes.message
-                    photoDao.update(
-                        insertedRecord.copy(
-                            syncStatus = PhotoRecord.SYNC_STATUS_SYNCED,
-                            syncTimestamp = System.currentTimeMillis()
-                        )
-                    )
-                }
-                is SyncResult.Error -> {
-                    _syncErrorMessage.value = syncRes.errorMessage
-                    photoDao.update(
-                        insertedRecord.copy(
-                            syncStatus = PhotoRecord.SYNC_STATUS_FAILED,
-                            syncErrorMessage = syncRes.errorMessage
-                        )
-                    )
+            val syncResult = syncManager.sendPhotoRecord(
+                photo = savedRecord,
+                settings = currentSettings
+            )
+
+            withContext(Dispatchers.Main) {
+                _isSyncing.value = false
+                when (syncResult) {
+                    is SyncResult.Success -> {
+                        _syncSuccessMessage.value = "Data berhasil disinkronkan"
+                        viewModelScope.launch(Dispatchers.IO) {
+                            photoDao.update(
+                                savedRecord.copy(
+                                    syncStatus = PhotoRecord.SYNC_STATUS_SYNCED,
+                                    syncTimestamp = System.currentTimeMillis(),
+                                    syncErrorMessage = null
+                                )
+                            )
+                        }
+                    }
+                    is SyncResult.Error -> {
+                        _syncErrorMessage.value = syncResult.errorMessage
+                        viewModelScope.launch(Dispatchers.IO) {
+                            photoDao.update(
+                                savedRecord.copy(
+                                    syncStatus = PhotoRecord.SYNC_STATUS_FAILED,
+                                    syncErrorMessage = syncResult.errorMessage
+                                )
+                            )
+                        }
+                    }
                 }
             }
-            _isSyncing.value = false
         }
     }
 
     fun syncSingleRecord(record: PhotoRecord) {
-        val currentSettings = settings.value
-        if (currentSettings.spreadsheetUrl.isBlank()) return
-
         viewModelScope.launch(Dispatchers.IO) {
-            when (val syncRes = syncManager.sendPhotoRecord(record, currentSettings)) {
+            val currentSettings = settings.value
+            val syncResult = syncManager.sendPhotoRecord(
+                photo = record,
+                settings = currentSettings
+            )
+
+            when (syncResult) {
                 is SyncResult.Success -> {
                     photoDao.update(
                         record.copy(
@@ -314,7 +371,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     photoDao.update(
                         record.copy(
                             syncStatus = PhotoRecord.SYNC_STATUS_FAILED,
-                            syncErrorMessage = syncRes.errorMessage
+                            syncErrorMessage = syncResult.errorMessage
                         )
                     )
                 }
@@ -322,38 +379,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun syncAllPendingPhotos(onCompleted: (successCount: Int, failedCount: Int) -> Unit) {
-        val currentSettings = settings.value
-        if (currentSettings.spreadsheetUrl.isBlank()) {
-            onCompleted(0, 0)
-            return
-        }
-
+    fun syncAllPendingPhotos(onCompleted: (success: Int, failed: Int) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val pendingList = photoDao.getPendingSyncPhotosList()
+            val pending = photoDao.getPendingSyncPhotosList()
+            val currentSettings = settings.value
             var success = 0
             var failed = 0
 
-            for (photo in pendingList) {
-                when (val res = syncManager.sendPhotoRecord(photo, currentSettings)) {
-                    is SyncResult.Success -> {
-                        photoDao.update(
-                            photo.copy(
-                                syncStatus = PhotoRecord.SYNC_STATUS_SYNCED,
-                                syncTimestamp = System.currentTimeMillis()
-                            )
+            for (photo in pending) {
+                val res = syncManager.sendPhotoRecord(photo, settings = currentSettings)
+                if (res is SyncResult.Success) {
+                    photoDao.update(
+                        photo.copy(
+                            syncStatus = PhotoRecord.SYNC_STATUS_SYNCED,
+                            syncErrorMessage = null,
+                            syncTimestamp = System.currentTimeMillis()
                         )
-                        success++
-                    }
-                    is SyncResult.Error -> {
-                        photoDao.update(
-                            photo.copy(
-                                syncStatus = PhotoRecord.SYNC_STATUS_FAILED,
-                                syncErrorMessage = res.errorMessage
-                            )
+                    )
+                    success++
+                } else if (res is SyncResult.Error) {
+                    photoDao.update(
+                        photo.copy(
+                            syncStatus = PhotoRecord.SYNC_STATUS_FAILED,
+                            syncErrorMessage = res.errorMessage
                         )
-                        failed++
-                    }
+                    )
+                    failed++
                 }
             }
             withContext(Dispatchers.Main) {
@@ -368,23 +419,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateSettings(newSettings: AppSettings) {
-        settingsRepo.updateSettings(newSettings)
-    }
-
-    fun updateSpreadsheetUrl(url: String) {
-        settingsRepo.updateSpreadsheetUrl(url)
-    }
-
     fun updateCompanyTag(tag: String) {
         settingsRepo.updateCompanyTag(tag)
-    }
-
-    fun testSpreadsheetConnection(url: String, onResult: (SyncResult) -> Unit) {
-        viewModelScope.launch {
-            val res = syncManager.testConnection(url)
-            onResult(res)
-        }
     }
 
     private fun vibrate() {
