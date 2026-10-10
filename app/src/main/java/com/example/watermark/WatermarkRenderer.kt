@@ -5,11 +5,14 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import com.example.camera.PhotoQualityEngine
+import com.example.camera.PhotoQualityStyle
 import com.example.location.LiveLocationData
 import com.example.location.MapTileHelper
 import com.example.security.SecurityCheckResult
@@ -23,7 +26,9 @@ data class WatermarkConfig(
     val qualityPercentage: Int = 85,
     val maxDimension: Int = 1920,
     val showDynamicMap: Boolean = true,
-    val showSecurityToken: Boolean = true
+    val showSecurityToken: Boolean = true,
+    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
+    val iphoneStyle: PhotoQualityStyle = qualityStyle
 )
 
 data class WatermarkResult(
@@ -48,11 +53,14 @@ object WatermarkRenderer {
         // 1. Scale down if exceeds maxDimension
         val scaledSource = scaleBitmap(sourceBitmap, config.maxDimension)
 
-        // 2. Estimate uncompressed raw size
-        val originalRawSize = (scaledSource.width * scaledSource.height * 4).toLong()
+        // 2. Computational photography enhancement (Smart HDR tone curve, color science, micro-contrast clarity)
+        val enhanced = PhotoQualityEngine.processBitmap(scaledSource, config.qualityStyle)
 
-        // 3. Create mutable working bitmap
-        val outputBitmap = scaledSource.copy(Bitmap.Config.ARGB_8888, true)
+        // 3. Estimate uncompressed raw size
+        val originalRawSize = (enhanced.width * enhanced.height * 4).toLong()
+
+        // 4. Create mutable working bitmap
+        val outputBitmap = enhanced.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
 
         val width = outputBitmap.width.toFloat()
@@ -71,51 +79,42 @@ object WatermarkRenderer {
         val cardRight = cardLeft + cardWidth
         val cornerRadius = 24f * scale
 
+        val isTampered = securityResult.isMockDetected || securityResult.isTimeManipulated
         val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
 
-        // Map as Semi-Transparent Watermark Card Background Texture
-        if (config.showDynamicMap) {
-            val mapBgThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
-                context = context,
-                lat = locationData.latitude,
-                lon = locationData.longitude,
-                zoom = 16,
-                targetSize = 256
-            )
-            canvas.save()
-            val cardClipPath = android.graphics.Path().apply {
-                addRoundRect(cardRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
-            }
-            canvas.clipPath(cardClipPath)
-            
-            // Draw map background with low alpha (~30% transparency)
-            val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                alpha = 75
-            }
-            canvas.drawBitmap(mapBgThumbnail, null, cardRect, mapPaint)
-
-            // Dark semi-transparent tint overlay for perfect text legibility
-            val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(175, 10, 18, 35)
-                style = Paint.Style.FILL
-            }
-            canvas.drawRect(cardRect, tintPaint)
-            canvas.restore()
-        } else {
-            val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(70, 10, 18, 35)
-                style = Paint.Style.FILL
-            }
-            canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, cardBgPaint)
+        // Clip rounded card and draw transparent background map texture
+        canvas.save()
+        val path = Path().apply {
+            addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW)
         }
+        canvas.clipPath(path)
+
+        val mapThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
+            context = context,
+            lat = locationData.latitude,
+            lon = locationData.longitude,
+            zoom = 16,
+            targetSize = 256
+        )
+        val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+            alpha = 55 // Soft transparent background map texture
+        }
+        canvas.drawBitmap(mapThumbnail, null, cardRect, mapPaint)
+
+        // Dark translucent glass overlay on top of map texture for crystal-clear readability
+        val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.argb(218, 10, 18, 35) // Dark translucent slate glass
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(cardRect, overlayPaint)
+        canvas.restore()
 
         // Subtle Card Border Stroke
-        val isTampered = securityResult.isMockDetected || securityResult.isTimeManipulated
         val cardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (isTampered) {
-                Color.argb(160, 239, 68, 68) // Red border if fake GPS or manipulated time
+                Color.argb(180, 239, 68, 68) // Red border if fake GPS or time manipulated
             } else {
-                Color.argb(75, 255, 255, 255) // Thin subtle frosted glass stroke
+                Color.argb(70, 255, 255, 255) // Thin subtle frosted glass stroke
             }
             style = Paint.Style.STROKE
             strokeWidth = 2.0f * scale
@@ -128,31 +127,6 @@ object WatermarkRenderer {
         val contentTop = cardTop + pad
         val contentBottom = cardBottom - pad
         val contentRight = cardRight - pad
-
-        // --- RIGHT BADGE: REAL DYNAMIC MAP WITH EXACT COORDINATE PINPOINT ---
-        var badgeLeft = contentRight
-        val badgeSize = 150f * scale
-        if (config.showDynamicMap) {
-            badgeLeft = contentRight - badgeSize
-            val badgeTop = contentTop + (cardHeight - pad * 2 - badgeSize) / 2f
-
-            val mapThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
-                context = context,
-                lat = locationData.latitude,
-                lon = locationData.longitude,
-                zoom = 16,
-                targetSize = 256
-            )
-
-            drawDynamicPinpointMap(
-                canvas = canvas,
-                mapBitmap = mapThumbnail,
-                x = badgeLeft,
-                y = badgeTop,
-                size = badgeSize,
-                scale = scale
-            )
-        }
 
         // --- LEFT COLUMN: Tag, Clock, Date ---
         val leftColWidth = 240f * scale
@@ -233,7 +207,7 @@ object WatermarkRenderer {
 
         // --- MIDDLE COLUMN: Full Address & Coordinates ---
         val midLeft = dividerX + 18f * scale
-        val midRight = if (config.showDynamicMap) badgeLeft - 16f * scale else contentRight
+        val midRight = contentRight
         val midWidth = max(midRight - midLeft, 100f)
 
         // 1. Multiline Address text
@@ -369,28 +343,27 @@ object WatermarkRenderer {
         size: Float,
         scale: Float
     ) {
-        val centerX = x + size / 2f
-        val centerY = y + size / 2f
-        val radius = size / 2f
+        val destRect = RectF(x, y, x + size, y + size)
+        val cornerRadius = 16f * scale
 
-        // Clip circular path for map thumbnail
+        // Clip rounded rectangle for map thumbnail
         canvas.save()
         val clipPath = android.graphics.Path().apply {
-            addCircle(centerX, centerY, radius, android.graphics.Path.Direction.CW)
+            addRoundRect(destRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
         }
         canvas.clipPath(clipPath)
 
-        val destRect = RectF(x, y, x + size, y + size)
+        // Draw real map with exact pinpoint marker
         canvas.drawBitmap(mapBitmap, null, destRect, null)
         canvas.restore()
 
-        // Subtle circular border
+        // Draw subtle glass border around thumbnail
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(160, 255, 255, 255)
+            color = Color.argb(120, 255, 255, 255)
             style = Paint.Style.STROKE
-            strokeWidth = 2.2f * scale
+            strokeWidth = 2.0f * scale
         }
-        canvas.drawCircle(centerX, centerY, radius, borderPaint)
+        canvas.drawRoundRect(destRect, cornerRadius, cornerRadius, borderPaint)
     }
 
     private fun scaleBitmap(bitmap: Bitmap, maxDim: Int): Bitmap {

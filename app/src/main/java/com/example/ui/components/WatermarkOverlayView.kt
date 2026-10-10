@@ -13,14 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -45,31 +39,36 @@ fun WatermarkOverlayView(
     modifier: Modifier = Modifier
 ) {
     val isMock = locationData.securityResult.isMockDetected
-    val borderColor = if (isMock) Color(0xB3EF4444) else Color(0x4DFFFFFF)
+    val isTimeFake = locationData.securityResult.isTimeManipulated
+    val isTampered = isMock || isTimeFake
+    val borderColor = if (isTampered) Color(0xB3EF4444) else Color(0x55FFFFFF)
 
-    // Ultra-translucent glass background with map texture
+    // Outer card container with Map as transparent background texture
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x550F172A))
             .border(1.2.dp, borderColor, RoundedCornerShape(16.dp))
     ) {
+        // 1. Map background texture with low alpha
         if (mapBitmap != null) {
             Image(
                 bitmap = mapBitmap.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
+                contentDescription = "Peta Background",
+                modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.28f
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xB80A1223))
+                alpha = 0.22f
             )
         }
 
+        // 2. Dark translucent glass overlay for crystal-clear readability
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color(0xD60F172A))
+        )
+
+        // 3. Content layout
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -105,8 +104,6 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(modifier = Modifier.height(3.dp))
-                val isTimeFake = locationData.securityResult.isTimeManipulated
-                val isTampered = isMock || isTimeFake
                 val badgeText = when {
                     isTimeFake && isMock -> "⚠️ WAKTU & GPS PALSU"
                     isTimeFake -> "⚠️ JAM DIMANIPULASI"
@@ -141,11 +138,11 @@ fun WatermarkOverlayView(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // MIDDLE COLUMN: Full Address, Coordinates, Crypto Token
+            // MIDDLE COLUMN: Full Address, Coordinates, Crypto Token (Spans remaining width)
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 8.dp),
+                    .padding(end = 4.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
@@ -167,48 +164,15 @@ fun WatermarkOverlayView(
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                val stampText = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED"
                 Text(
-                    text = "SIG: #${locationData.securityResult.signatureToken} • LIVE ENCRYPTED",
+                    text = stampText,
                     color = Color(0xFFCBD5E1),
                     fontSize = 8.sp,
                     fontFamily = FontFamily.Monospace,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            // RIGHT COLUMN: REAL DYNAMIC CIRCULAR 3D MAP DISC
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (mapBitmap != null) {
-                    Image(
-                        bitmap = mapBitmap.asImageBitmap(),
-                        contentDescription = "Peta Lokasi GPS Asli",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF38BDF8),
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "MAPS",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
             }
         }
     }
