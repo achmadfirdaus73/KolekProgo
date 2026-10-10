@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">KolekPro Cam</string>
+    <string name="title_camera">Kamera</string>
+    <string name="title_gallery">Riwayat Foto</string>
+    <string name="title_settings">Integrasi &amp; Pengaturan</string>
+    <string name="btn_capture">Ambil Foto</string>
+    <string name="btn_retake">Ulangi</string>
+    <string name="btn_save_gallery">Simpan ke Galeri</string>
+    <string name="btn_sync_sheet">Kirim ke Spreadsheet</string>
+    <string name="status_authentic">LOKASI ASLI &amp; TERVERIFIKASI</string>
+    <string name="status_mock_detected">PERINGATAN: FAKE GPS TERDETEKSI</string>
+    <string name="sheet_connected">Spreadsheet Terhubung</string>
+    <string name="sheet_disconnected">Belum Terhubung</string>
+</resources>
