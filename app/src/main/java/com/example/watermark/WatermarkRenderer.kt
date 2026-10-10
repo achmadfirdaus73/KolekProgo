@@ -10,8 +10,6 @@ import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-import com.example.camera.PhotoQualityEngine
-import com.example.camera.PhotoQualityStyle
 import com.example.location.LiveLocationData
 import com.example.location.MapTileHelper
 import com.example.security.SecurityCheckResult
@@ -25,9 +23,7 @@ data class WatermarkConfig(
     val qualityPercentage: Int = 85,
     val maxDimension: Int = 1920,
     val showDynamicMap: Boolean = true,
-    val showSecurityToken: Boolean = true,
-    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
-    val iphoneStyle: PhotoQualityStyle = qualityStyle
+    val showSecurityToken: Boolean = true
 )
 
 data class WatermarkResult(
@@ -52,14 +48,11 @@ object WatermarkRenderer {
         // 1. Scale down if exceeds maxDimension
         val scaledSource = scaleBitmap(sourceBitmap, config.maxDimension)
 
-        // 2. Computational photography enhancement (Smart HDR tone curve, color science, micro-contrast clarity)
-        val enhanced = PhotoQualityEngine.processBitmap(scaledSource, config.qualityStyle)
+        // 2. Estimate uncompressed raw size
+        val originalRawSize = (scaledSource.width * scaledSource.height * 4).toLong()
 
-        // 3. Estimate uncompressed raw size
-        val originalRawSize = (enhanced.width * enhanced.height * 4).toLong()
-
-        // 4. Create mutable working bitmap
-        val outputBitmap = enhanced.copy(Bitmap.Config.ARGB_8888, true)
+        // 3. Create mutable working bitmap
+        val outputBitmap = scaledSource.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(outputBitmap)
 
         val width = outputBitmap.width.toFloat()
@@ -78,11 +71,42 @@ object WatermarkRenderer {
         val cardRight = cardLeft + cardWidth
         val cornerRadius = 24f * scale
 
-        // Background Card Paint - ULTRA-TRANSLUCENT FROSTED GLASS (~25% opacity)
-        // Satisfies user requirement: "transparant watermarknya buat lebih transparant lagi"
-        val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(65, 10, 18, 35) // Deep ultra-translucent navy glass
-            style = Paint.Style.FILL
+        val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
+
+        // Map as Semi-Transparent Watermark Card Background Texture
+        if (config.showDynamicMap) {
+            val mapBgThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
+                context = context,
+                lat = locationData.latitude,
+                lon = locationData.longitude,
+                zoom = 16,
+                targetSize = 256
+            )
+            canvas.save()
+            val cardClipPath = android.graphics.Path().apply {
+                addRoundRect(cardRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
+            }
+            canvas.clipPath(cardClipPath)
+            
+            // Draw map background with low alpha (~30% transparency)
+            val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                alpha = 75
+            }
+            canvas.drawBitmap(mapBgThumbnail, null, cardRect, mapPaint)
+
+            // Dark semi-transparent tint overlay for perfect text legibility
+            val tintPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(175, 10, 18, 35)
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(cardRect, tintPaint)
+            canvas.restore()
+        } else {
+            val cardBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(70, 10, 18, 35)
+                style = Paint.Style.FILL
+            }
+            canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, cardBgPaint)
         }
 
         // Subtle Card Border Stroke
@@ -91,14 +115,11 @@ object WatermarkRenderer {
             color = if (isTampered) {
                 Color.argb(160, 239, 68, 68) // Red border if fake GPS or manipulated time
             } else {
-                Color.argb(65, 255, 255, 255) // Thin subtle frosted glass stroke
+                Color.argb(75, 255, 255, 255) // Thin subtle frosted glass stroke
             }
             style = Paint.Style.STROKE
             strokeWidth = 2.0f * scale
         }
-
-        val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
-        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, cardBgPaint)
         canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, cardBorderPaint)
 
         // Content padding inside card
@@ -348,27 +369,28 @@ object WatermarkRenderer {
         size: Float,
         scale: Float
     ) {
-        val destRect = RectF(x, y, x + size, y + size)
-        val cornerRadius = 16f * scale
+        val centerX = x + size / 2f
+        val centerY = y + size / 2f
+        val radius = size / 2f
 
-        // Clip rounded rectangle for map thumbnail
+        // Clip circular path for map thumbnail
         canvas.save()
         val clipPath = android.graphics.Path().apply {
-            addRoundRect(destRect, cornerRadius, cornerRadius, android.graphics.Path.Direction.CW)
+            addCircle(centerX, centerY, radius, android.graphics.Path.Direction.CW)
         }
         canvas.clipPath(clipPath)
 
-        // Draw real map with exact pinpoint marker
+        val destRect = RectF(x, y, x + size, y + size)
         canvas.drawBitmap(mapBitmap, null, destRect, null)
         canvas.restore()
 
-        // Draw subtle glass border around thumbnail
+        // Subtle circular border
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(120, 255, 255, 255)
+            color = Color.argb(160, 255, 255, 255)
             style = Paint.Style.STROKE
-            strokeWidth = 2.0f * scale
+            strokeWidth = 2.2f * scale
         }
-        canvas.drawRoundRect(destRect, cornerRadius, cornerRadius, borderPaint)
+        canvas.drawCircle(centerX, centerY, radius, borderPaint)
     }
 
     private fun scaleBitmap(bitmap: Bitmap, maxDim: Int): Bitmap {

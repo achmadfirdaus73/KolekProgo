@@ -308,34 +308,6 @@ object MapTileHelper {
         }
         circleCanvas.drawCircle(circleX, circleY, circleRadius, borderPaint)
 
-        // Bottom "3D MAPS" Pill Badge matching user reference image exactly
-        val badgeW = 76f
-        val badgeH = 19f
-        val badgeL = (targetSize - badgeW) / 2f
-        val badgeT = targetSize - 22f
-        val badgeRect = RectF(badgeL, badgeT, badgeL + badgeW, badgeT + badgeH)
-
-        val badgeBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(230, 15, 23, 42)
-            style = Paint.Style.FILL
-        }
-        val badgeBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(110, 255, 255, 255)
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-        }
-        circleCanvas.drawRoundRect(badgeRect, 9.5f, 9.5f, badgeBg)
-        circleCanvas.drawRoundRect(badgeRect, 9.5f, 9.5f, badgeBorder)
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            textSize = 10f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            textAlign = Paint.Align.CENTER
-            letterSpacing = 0.05f
-        }
-        circleCanvas.drawText("3D MAPS", badgeL + badgeW / 2f, badgeT + 13.5f, textPaint)
-
         return circularBitmap
     }
 
