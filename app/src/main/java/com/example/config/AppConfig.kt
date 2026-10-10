@@ -12,7 +12,7 @@ object AppConfig {
      * TEMPELKAN URL GOOGLE APPS SCRIPT WEB APP DI SINI:
      * Contoh: "https://script.google.com/macros/s/AKfycby.../exec"
      */
-    const val SPREADSHEET_WEBAPP_URL: String = "https://script.google.com/macros/s/YOUR_APPS_SCRIPT_ID_HERE/exec"
+    const val SPREADSHEET_WEBAPP_URL: String = "https://script.google.com/macros/s/AKfycbxkk6qHTNzZQIsFSPhNjLJ42sg0AWSdrnV_iEs9LApEgK7GLQApenWyxPUmp6yZV7nm/exec"
 
     /**
      * Label watermark & unit default
@@ -34,6 +34,6 @@ object AppConfig {
      */
     fun isSpreadsheetConfigured(): Boolean {
         val url = SPREADSHEET_WEBAPP_URL.trim()
-        return url.startsWith("https://") && !url.contains("YOUR_APPS_SCRIPT_ID_HERE")
+        return url.startsWith("https://") && !url.contains("AKfycbxkk6qHTNzZQIsFSPhNjLJ42sg0AWSdrnV_iEs9LApEgK7GLQApenWyxPUmp6yZV7nm")
     }
 }
