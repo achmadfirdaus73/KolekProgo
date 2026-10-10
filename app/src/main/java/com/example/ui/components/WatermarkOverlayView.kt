@@ -50,14 +50,14 @@ fun WatermarkOverlayView(
             .clip(RoundedCornerShape(16.dp))
             .border(1.2.dp, borderColor, RoundedCornerShape(16.dp))
     ) {
-        // 1. Map background texture with low alpha
+        // 1. Map background texture with clear visibility
         if (mapBitmap != null) {
             Image(
                 bitmap = mapBitmap.asImageBitmap(),
                 contentDescription = "Peta Background",
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.22f
+                alpha = 0.45f
             )
         }
 
@@ -65,7 +65,7 @@ fun WatermarkOverlayView(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .background(Color(0xD60F172A))
+                .background(Color(0xA90F172A))
         )
 
         // 3. Content layout

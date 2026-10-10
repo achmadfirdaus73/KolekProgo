@@ -89,21 +89,20 @@ object WatermarkRenderer {
         }
         canvas.clipPath(path)
 
-        val mapThumbnail = customMapThumbnail ?: MapTileHelper.getOrGenerateThumbnailSync(
+        val mapTile = customMapThumbnail ?: MapTileHelper.getRawTileSync(
             context = context,
             lat = locationData.latitude,
             lon = locationData.longitude,
-            zoom = 16,
-            targetSize = 256
+            zoom = 16
         )
         val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            alpha = 55 // Soft transparent background map texture
+            alpha = 135 // Clear visible background map texture (~53% opacity)
         }
-        canvas.drawBitmap(mapThumbnail, null, cardRect, mapPaint)
+        canvas.drawBitmap(mapTile, null, cardRect, mapPaint)
 
         // Dark translucent glass overlay on top of map texture for crystal-clear readability
         val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(218, 10, 18, 35) // Dark translucent slate glass
+            color = Color.argb(170, 15, 23, 42) // Balanced dark slate tint so map is clearly visible
             style = Paint.Style.FILL
         }
         canvas.drawRect(cardRect, overlayPaint)
