@@ -74,6 +74,8 @@ class SpreadsheetSyncManager(private val context: Context) {
                 put("status", statusText)
                 put("isMock", photo.isMockDetected)
                 put("isTimeManipulated", photo.isTimeManipulated)
+                put("deviceModel", photo.cameraStyle)
+                put("cameraSpecs", "Smart HDR 24mm f/1.8 High Clarity")
                 put("integrityHash", photo.integrityHash)
                 put("signatureToken", photo.signatureToken)
                 put("note", photo.note)

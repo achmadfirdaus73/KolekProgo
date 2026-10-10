@@ -91,6 +91,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedPhotoDetail = MutableStateFlow<PhotoRecord?>(null)
     val selectedPhotoDetail: StateFlow<PhotoRecord?> = _selectedPhotoDetail.asStateFlow()
 
+    // Computational photography HDR quality styles
+    private val _photoQualityStyle = MutableStateFlow(com.example.camera.PhotoQualityStyle.SMART_HDR_ULTRA)
+    val photoQualityStyle: StateFlow<com.example.camera.PhotoQualityStyle> = _photoQualityStyle.asStateFlow()
+    val iphoneStyle: StateFlow<com.example.camera.PhotoQualityStyle> = _photoQualityStyle.asStateFlow()
+
+    fun setPhotoQualityStyle(style: com.example.camera.PhotoQualityStyle) {
+        _photoQualityStyle.value = style
+    }
+
+    fun cyclePhotoQualityStyle() {
+        val styles = com.example.camera.PhotoQualityStyle.values()
+        val nextIndex = (styles.indexOf(_photoQualityStyle.value) + 1) % styles.size
+        _photoQualityStyle.value = styles[nextIndex]
+    }
+
+    fun cycleIPhoneStyle() = cyclePhotoQualityStyle()
+
     var cameraController: CameraController? = null
 
     init {
@@ -199,7 +216,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 qualityPercentage = currentSettings.compressionQuality,
                 maxDimension = maxDim,
                 showDynamicMap = true,
-                showSecurityToken = true
+                showSecurityToken = true,
+                qualityStyle = _photoQualityStyle.value
             )
 
             val currentMap = _currentMapThumbnail.value
@@ -223,19 +241,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val currentLoc = locationData.value
             val currentSettings = settings.value
+            val currentStyle = _photoQualityStyle.value
 
-            // 1. Save to Internal Storage
+            // 1. Save to Internal Storage with Calibrated EXIF Metadata
             val internalFile = StorageHelper.saveToInternalStorage(
-                getApplication(),
-                result.jpegBytes,
-                currentSettings.companyTag
+                context = getApplication(),
+                jpegBytes = result.jpegBytes,
+                tagLabel = currentSettings.companyTag,
+                latitude = currentLoc.latitude,
+                longitude = currentLoc.longitude,
+                style = currentStyle,
+                timestampMs = currentLoc.timestamp
             )
 
             // 2. Export to device MediaStore Gallery
             StorageHelper.exportToGallery(
-                getApplication(),
-                result.jpegBytes,
-                currentSettings.companyTag
+                context = getApplication(),
+                savedFile = internalFile,
+                tagLabel = currentSettings.companyTag,
+                style = currentStyle
             )
             _isSavedToGallery.value = true
 
@@ -251,6 +275,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 address = currentLoc.address,
                 isMockDetected = currentLoc.securityResult.isMockDetected,
                 isTimeManipulated = currentLoc.securityResult.isTimeManipulated,
+                cameraStyle = currentStyle.title,
                 integrityHash = result.integrityHash,
                 signatureToken = currentLoc.securityResult.signatureToken,
                 note = note,
@@ -305,6 +330,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 address = currentLoc.address,
                 isMockDetected = currentLoc.securityResult.isMockDetected,
                 isTimeManipulated = currentLoc.securityResult.isTimeManipulated,
+                cameraStyle = _photoQualityStyle.value.title,
                 integrityHash = result.integrityHash,
                 signatureToken = currentLoc.securityResult.signatureToken,
                 note = note,

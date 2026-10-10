@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.Edit
@@ -78,6 +79,7 @@ fun CameraScreen(
     val gridEnabled by viewModel.gridEnabled.collectAsState()
     val exposureBoost by viewModel.exposureBoost.collectAsState()
     val currentMapThumbnail by viewModel.currentMapThumbnail.collectAsState()
+    val iphoneStyle by viewModel.iphoneStyle.collectAsState()
 
     val isMock = locationData.securityResult.isMockDetected
 
@@ -223,6 +225,57 @@ fun CameraScreen(
                             .testTag("btn_switch_camera")
                     ) {
                         Icon(Icons.Default.Cameraswitch, contentDescription = "Ganti Kamera", tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+
+            // Smart HDR & Photo Clarity Quality Selector (no iPhone text)
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xD90F172A))
+                        .border(
+                            1.dp,
+                            if (iphoneStyle != com.example.camera.PhotoQualityStyle.OFF) Color(0x8838BDF8) else Color(0x44FFFFFF),
+                            RoundedCornerShape(20.dp)
+                        )
+                        .clickable { viewModel.cyclePhotoQualityStyle() }
+                        .padding(horizontal = 12.dp, vertical = 5.dp)
+                        .testTag("btn_photo_quality_toggle")
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Tone HDR",
+                            tint = Color(0xFF38BDF8),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = iphoneStyle.title,
+                            color = Color.White,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0x3338BDF8))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "HDR",
+                                color = Color(0xFF38BDF8),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
