@@ -189,8 +189,8 @@ class SpreadsheetSyncManager(private val context: Context) {
         fun getGoogleAppsScriptTemplate(): String {
             return """
 /**
- * KOLEKPRO CAM - Google Sheets Webhook Script
- * --------------------------------------------
+ * KOLEKPRO CAM - Google Sheets & Drive Webhook Script
+ * ---------------------------------------------------
  * Cara Pemasangan:
  * 1. Di Google Sheets, klik menu 'Ekstensi' > 'Apps Script'
  * 2. Hapus semua teks yang ada, lalu paste seluruh skrip ini
@@ -219,10 +219,12 @@ function doPost(e) {
         "Status Keaslian",
         "Hash Integritas (Anti-Tamper)",
         "Catatan",
-        "Pratinjau Foto"
+        "Pratinjau Foto (Drive)",
+        "Link Drive Foto"
       ]);
       // Format header
-      sheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#0F172A").setFontColor("#FFFFFF");
+      sheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#0F172A").setFontColor("#FFFFFF");
+      sheet.setRowHeight(1, 32);
     }
 
     var contents = e.postData.contents;
@@ -237,10 +239,35 @@ function doPost(e) {
     var status = data.status || (data.isMock ? "PERINGATAN: FAKE GPS" : "ASLI TERVERIFIKASI");
     var integrityHash = data.integrityHash || "";
     var note = data.note || "";
-    var thumbFormula = "";
     
+    var imageFormula = "Tidak ada foto";
+    var driveLink = "";
+
+    // Upload otomatis gambar ke Google Drive dan tampilkan preview di Spreadsheet
     if (data.thumbnailBase64 && data.thumbnailBase64.length > 0) {
-      thumbFormula = "Foto Tersimpan (" + data.fileSizeBytes + " B)";
+      try {
+        var folders = DriveApp.getFoldersByName("KolekPro_Photos");
+        var folder;
+        if (folders.hasNext()) {
+          folder = folders.next();
+        } else {
+          folder = DriveApp.createFolder("KolekPro_Photos");
+        }
+
+        var blob = Utilities.newBlob(Utilities.base64Decode(data.thumbnailBase64), "image/jpeg", "KolekPro_" + new Date().getTime() + ".jpg");
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        
+        driveLink = file.getUrl();
+        var fileId = file.getId();
+        var directImageUrl = "https://drive.google.com/uc?export=view&id=" + fileId;
+        imageFormula = '=IMAGE("' + directImageUrl + '")';
+        
+        var newRow = sheet.getLastRow() + 1;
+        sheet.setRowHeight(newRow, 90);
+      } catch (imgErr) {
+        imageFormula = "Gagal upload gambar: " + imgErr.toString();
+      }
     }
 
     sheet.appendRow([
@@ -253,13 +280,14 @@ function doPost(e) {
       status,
       integrityHash,
       note,
-      thumbFormula
+      imageFormula,
+      driveLink
     ]);
 
     return ContentService.createTextOutput(JSON.stringify({
       "status": "success",
       "row": sheet.getLastRow(),
-      "message": "Data foto berhasil direkam di Google Sheets"
+      "message": "Data dan foto berhasil direkam di Google Sheets & Drive"
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch(err) {
@@ -271,7 +299,7 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return ContentService.createTextOutput("KolekPro Cam Google Sheets Webhook Aktif dan Siap Digunakan!");
+  return ContentService.createTextOutput("KolekPro Cam Google Sheets & Drive Webhook Aktif dan Siap Digunakan!");
 }
             """.trimIndent()
         }
