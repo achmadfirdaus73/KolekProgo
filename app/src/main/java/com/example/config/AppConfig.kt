@@ -22,12 +22,12 @@ object AppConfig {
     /**
      * Kualitas kompresi foto JPEG (40 - 100)
      */
-    const val DEFAULT_COMPRESSION_QUALITY: Int = 85
+    const val DEFAULT_COMPRESSION_QUALITY: Int = 95
 
     /**
      * Preset resolusi ("1080p", "720p", "ORIGINAL")
      */
-    const val DEFAULT_RESOLUTION_PRESET: String = "1080p"
+    const val DEFAULT_RESOLUTION_PRESET: String = "ORIGINAL"
 
     /**
      * Memeriksa apakah URL sudah diisi oleh pengguna (bukan placeholder default)

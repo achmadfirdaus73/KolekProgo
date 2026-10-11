@@ -17,6 +17,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.TimeUnit
+import kotlin.math.min
 
 sealed class SyncResult {
     data class Success(val message: String, val rowId: String? = null) : SyncResult()
@@ -46,12 +47,11 @@ class SpreadsheetSyncManager(private val context: Context) {
         }
 
         try {
-            // Optional mini base64 thumbnail for spreadsheet
             var thumbnailBase64 = ""
             if (settings.includeThumbnailInSync && photo.filePath.isNotEmpty()) {
                 val file = File(photo.filePath)
                 if (file.exists()) {
-                    thumbnailBase64 = generateMiniThumbnailBase64(file)
+                    thumbnailBase64 = generateHighResPhotoBase64(file)
                 }
             }
 
@@ -160,15 +160,40 @@ class SpreadsheetSyncManager(private val context: Context) {
         }
     }
 
-    private fun generateMiniThumbnailBase64(file: File): String {
+    private fun generateHighResPhotoBase64(file: File): String {
         return try {
             val options = BitmapFactory.Options().apply {
-                inSampleSize = 8
+                inJustDecodeBounds = true
             }
-            val bmp = BitmapFactory.decodeFile(file.absolutePath, options) ?: return ""
-            val thumb = Bitmap.createScaledBitmap(bmp, 120, 120, true)
+            BitmapFactory.decodeFile(file.absolutePath, options)
+            val maxDim = 1440 // High-Definition HD resolution for Google Drive & Spreadsheet
+            var inSampleSize = 1
+            if (options.outHeight > maxDim || options.outWidth > maxDim) {
+                val halfHeight: Int = options.outHeight / 2
+                val halfWidth: Int = options.outWidth / 2
+                while ((halfHeight / inSampleSize) >= maxDim && (halfWidth / inSampleSize) >= maxDim) {
+                    inSampleSize *= 2
+                }
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                this.inSampleSize = inSampleSize
+            }
+            val bmp = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return ""
+            
+            val w = bmp.width
+            val h = bmp.height
+            val scaledBmp = if (w > maxDim || h > maxDim) {
+                val ratio = min(maxDim.toFloat() / w, maxDim.toFloat() / h)
+                val targetW = (w * ratio).toInt()
+                val targetH = (h * ratio).toInt()
+                Bitmap.createScaledBitmap(bmp, targetW, targetH, true)
+            } else {
+                bmp
+            }
+
             val stream = ByteArrayOutputStream()
-            thumb.compress(Bitmap.CompressFormat.JPEG, 60, stream)
+            scaledBmp.compress(Bitmap.CompressFormat.JPEG, 90, stream)
             val bytes = stream.toByteArray()
             Base64.encodeToString(bytes, Base64.NO_WRAP)
         } catch (_: Exception) {

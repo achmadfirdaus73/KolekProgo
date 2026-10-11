@@ -208,7 +208,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val maxDim = when (currentSettings.resolutionPreset) {
                 "720p" -> 1280
                 "ORIGINAL" -> 0
-                else -> 1920
+                else -> 3840 // 4K crystal-clear maximum resolution
             }
 
             val config = WatermarkConfig(
