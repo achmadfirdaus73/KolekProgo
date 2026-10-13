@@ -64,6 +64,12 @@ android {
     includeInApk = false
     includeInBundle = true
   }
+
+  sourceSets {
+    getByName("main") {
+      java.srcDirs("src/commonMain/kotlin", "src/androidMain/kotlin")
+    }
+  }
 }
 
 secrets {
