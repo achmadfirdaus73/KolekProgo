@@ -44,7 +44,6 @@ fun CameraScreen(
     val currentMapThumbnail by viewModel.currentMapThumbnail.collectAsState()
     val photoQualityStyle by viewModel.photoQualityStyle.collectAsState()
 
-    var showSettingsSheet by remember { mutableStateOf(false) }
     var noteText by remember { mutableStateOf("") }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
@@ -114,20 +113,6 @@ fun CameraScreen(
                     Icon(
                         imageVector = Icons.Default.Cameraswitch,
                         contentDescription = "Switch Camera",
-                        tint = Color.White
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(
-                    onClick = { showSettingsSheet = true },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color(0x660F172A))
-                        .testTag("btn_settings")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
                         tint = Color.White
                     )
                 }
@@ -256,87 +241,6 @@ fun CameraScreen(
             )
         }
 
-        // Settings Bottom Sheet
-        if (showSettingsSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showSettingsSheet = false },
-                containerColor = Color(0xFF1E293B)
-            ) {
-                var currentTag by remember { mutableStateOf(settings.companyTag) }
-                var currentUrl by remember { mutableStateOf(settings.spreadsheetUrl) }
-                var autoSync by remember { mutableStateOf(settings.autoSyncToSpreadsheet) }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 12.dp)
-                ) {
-                    Text(
-                        "Pengaturan KolekPro Cam",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    OutlinedTextField(
-                        value = currentTag,
-                        onValueChange = { currentTag = it },
-                        label = { Text("Label Tag Perusahaan / Unit") },
-                        modifier = Modifier.fillMaxWidth().testTag("input_company_tag")
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = currentUrl,
-                        onValueChange = { currentUrl = it },
-                        label = { Text("URL Web App Google Sheets") },
-                        modifier = Modifier.fillMaxWidth().testTag("input_spreadsheet_url"),
-                        maxLines = 2
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Otomatis Sinkronisasi ke Spreadsheet",
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
-                        Switch(
-                            checked = autoSync,
-                            onCheckedChange = { autoSync = it },
-                            modifier = Modifier.testTag("switch_auto_sync")
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    Button(
-                        onClick = {
-                            viewModel.updateSettings(
-                                settings.copy(
-                                    companyTag = currentTag.trim().ifEmpty { "KOLEKPRO" },
-                                    spreadsheetUrl = currentUrl.trim(),
-                                    autoSyncToSpreadsheet = autoSync
-                                )
-                            )
-                            showSettingsSheet = false
-                        },
-                        modifier = Modifier.fillMaxWidth().testTag("btn_save_settings"),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
-                    ) {
-                        Text("Simpan Pengaturan")
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-            }
-        }
     }
 }

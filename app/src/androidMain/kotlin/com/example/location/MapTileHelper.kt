@@ -158,41 +158,88 @@ object MapTileHelper {
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
+        // Tactical dark blueprint background
         val bgPaint = Paint().apply {
-            color = Color.parseColor("#E5E7EB")
+            color = Color.parseColor("#0A0F1D")
             style = Paint.Style.FILL
         }
         canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
 
-        val parkPaint = Paint().apply {
-            color = Color.parseColor("#D1FAE5")
+        // Isometric / Angled grid lines
+        val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#1E293B")
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+        }
+        var x = 0f
+        while (x < size * 2) {
+            canvas.drawLine(x, 0f, 0f, x, gridPaint)
+            x += 24f
+        }
+
+        // Angled / Isometric building blocks (Tactical 3D projection)
+        val buildingFill = Paint().apply {
+            color = Color.parseColor("#1E293B")
             style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(RectF(16f, 20f, 100f, 90f), 12f, 12f, parkPaint)
-        canvas.drawRoundRect(RectF(160f, 150f, 240f, 220f), 12f, 12f, parkPaint)
-
-        val mainRoadPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#FFFFFF")
-            style = Paint.Style.STROKE
-            strokeWidth = 8f
+        val buildingTop = Paint().apply {
+            color = Color.parseColor("#334155")
+            style = Paint.Style.FILL
         }
-        val roadOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#CBD5E1")
+        val neonOutline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#38BDF8")
             style = Paint.Style.STROKE
-            strokeWidth = 10f
+            strokeWidth = 2f
         }
 
-        val roads = listOf(
-            Pair(0f to 128f, size.toFloat() to 128f),
-            Pair(128f to 0f, 128f to size.toFloat()),
-            Pair(40f to 0f, 40f to size.toFloat()),
-            Pair(216f to 0f, 216f to size.toFloat())
+        val blocks = listOf(
+            RectF(30f, 40f, 90f, 110f),
+            RectF(120f, 30f, 200f, 100f),
+            RectF(40f, 140f, 130f, 210f),
+            RectF(150f, 130f, 220f, 200f)
         )
 
-        for ((start, end) in roads) {
-            canvas.drawLine(start.first, start.second, end.first, end.second, roadOutlinePaint)
-            canvas.drawLine(start.first, start.second, end.first, end.second, mainRoadPaint)
+        for (block in blocks) {
+            val shadowRect = RectF(block.left + 6f, block.top + 6f, block.right + 6f, block.bottom + 6f)
+            canvas.drawRect(shadowRect, buildingFill)
+            canvas.drawRect(block, buildingTop)
+            canvas.drawRect(block, neonOutline)
         }
+
+        // Angled roads / highways with glowing center lines
+        val roadPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#0F172A")
+            style = Paint.Style.STROKE
+            strokeWidth = 16f
+        }
+        val roadCenterPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#38BDF8")
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            pathEffect = android.graphics.DashPathEffect(floatArrayOf(8f, 8f), 0f)
+        }
+
+        canvas.drawLine(0f, 128f, size.toFloat(), 128f, roadPaint)
+        canvas.drawLine(0f, 128f, size.toFloat(), 128f, roadCenterPaint)
+
+        canvas.drawLine(128f, 0f, 128f, size.toFloat(), roadPaint)
+        canvas.drawLine(128f, 0f, 128f, size.toFloat(), roadCenterPaint)
+
+        // Center tactical crosshair / radar scope (Broadcast stadium aerial view HUD)
+        val radarPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#10B981")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f
+            alpha = 180
+        }
+        canvas.drawCircle(size / 2f, size / 2f, 45f, radarPaint)
+        canvas.drawCircle(size / 2f, size / 2f, 85f, radarPaint)
+        
+        val centerPointPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#34D399")
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(size / 2f, size / 2f, 5f, centerPointPaint)
 
         return bitmap
     }
