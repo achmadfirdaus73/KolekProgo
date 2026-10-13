@@ -34,6 +34,10 @@ class LocationManager(private val context: Context, private val scope: Coroutine
     private val timeFormat = SimpleDateFormat("HH:mm", Locale("id", "ID"))
     private val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
 
+    private var lastRealLat: Double = -6.175392
+    private var lastRealLon: Double = 106.827153
+    private var lastRealAddr: String = "Jl. Raya No. 1, Jakarta, Indonesia"
+
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let { updateLocation(it) }
@@ -68,12 +72,22 @@ class LocationManager(private val context: Context, private val scope: Coroutine
 
         scope.launch {
             val addressText = getAddressFromCoords(loc.latitude, loc.longitude)
+
+            if (!security.isMockDetected) {
+                lastRealLat = loc.latitude
+                lastRealLon = loc.longitude
+                lastRealAddr = addressText
+            }
+
             _locationData.value = LiveLocationData(
                 latitude = loc.latitude,
                 longitude = loc.longitude,
+                realLatitude = if (security.isMockDetected) lastRealLat else loc.latitude,
+                realLongitude = if (security.isMockDetected) lastRealLon else loc.longitude,
                 altitude = loc.altitude,
                 accuracy = loc.accuracy,
                 address = addressText,
+                realAddress = if (security.isMockDetected) lastRealAddr else addressText,
                 formattedTime = formattedTime,
                 formattedDate = formattedDate,
                 securityResult = security

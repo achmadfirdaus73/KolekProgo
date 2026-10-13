@@ -14,7 +14,6 @@ import kotlin.math.abs
 object AntiFakeLocationDetector {
 
     private var persistentMockDetected = false
-    private var persistentTimeFakeDetected = false
 
     fun analyzeLocation(context: Context, location: Location?): SecurityCheckResult {
         val anomalies = mutableListOf<String>()
@@ -41,10 +40,10 @@ object AntiFakeLocationDetector {
             anomalies.add("Mock location previously detected (locked)")
         }
 
-        // Time manipulation detection with strict persistence and manual time check
+        // Time manipulation detection (dynamic real-time check so it automatically normalizes when user turns automatic time back on)
         val systemTime = System.currentTimeMillis()
         val elapsedRealtime = SystemClock.elapsedRealtime()
-        var isTimeFake = persistentTimeFakeDetected
+        var isTimeFake = false
 
         // Check if automatic time is disabled in device settings (manual clock tampering)
         try {
@@ -52,7 +51,6 @@ object AntiFakeLocationDetector {
             val autoTimeZone = Settings.Global.getInt(context.contentResolver, Settings.Global.AUTO_TIME_ZONE, 1)
             if (autoTime == 0 || autoTimeZone == 0) {
                 isTimeFake = true
-                persistentTimeFakeDetected = true
                 anomalies.add("Device automatic date/time or time zone is disabled (manual time override)")
             }
         } catch (_: Exception) {}
@@ -62,13 +60,8 @@ object AntiFakeLocationDetector {
             // If system clock differs from GPS clock by more than 10 minutes
             if (diff > 10 * 60 * 1000) {
                 isTimeFake = true
-                persistentTimeFakeDetected = true
                 anomalies.add("System clock differs significantly from GPS timestamp")
             }
-        }
-
-        if (persistentTimeFakeDetected && !anomalies.any { it.contains("time", ignoreCase = true) || it.contains("clock", ignoreCase = true) }) {
-            anomalies.add("Time manipulation detected and locked for session")
         }
 
         val lat = location?.latitude ?: 0.0
