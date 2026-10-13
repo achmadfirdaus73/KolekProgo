@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android (Release & Debug APK + AAB)
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 
 jobs:
   build:
+    name: Build Android Release APK, AAB & Debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -22,16 +23,16 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Prepare Secrets and Debug Keystore
+    - name: Prepare Secrets and Keystores
       run: |
-        # Ensure .env exists for Secrets Gradle Plugin
+        # 1. Environment Secrets configuration (.env)
         if [ ! -f .env ] && [ -f .env.example ]; then
           cp .env.example .env
         elif [ ! -f .env ]; then
           touch .env
         fi
 
-        # Ensure debug.keystore exists for signingConfig
+        # 2. Debug Keystore
         if [ -f debug.keystore.base64 ] && [ ! -f debug.keystore ]; then
           base64 -d debug.keystore.base64 > debug.keystore
         fi
@@ -47,6 +48,28 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
         fi
 
+        # 3. Release Keystore for APK & AAB
+        if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+          echo "Decoding release keystore from secrets..."
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+          echo "STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+        else
+          echo "Generating automated release upload keystore..."
+          keytool -genkeypair -v \
+            -keystore my-upload-key.jks \
+            -storepass android \
+            -keypass android \
+            -alias upload \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Release Upload Key,O=AIStudio,C=ID"
+          echo "STORE_PASSWORD=android" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+        fi
+        echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/my-upload-key.jks" >> $GITHUB_ENV
+
     - name: Grant execute permission for gradlew
       run: |
         if [ ! -f ./gradlew ]; then
@@ -54,8 +77,30 @@ jobs:
         fi
         chmod +x gradlew
 
-    - name: Build Debug APK
+    - name: Build Android Release APK
+      run: ./gradlew assembleRelease --stacktrace
+
+    - name: Build Android Release AAB (Google Play Store Bundle)
+      run: ./gradlew bundleRelease --stacktrace
+
+    - name: Build Android Debug APK
       run: ./gradlew assembleDebug --stacktrace
+
+    - name: Upload Release APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: KolekPro-Cam-Release-APK
+        path: app/build/outputs/apk/release/*.apk
+        retention-days: 7
+        if-no-files-found: warn
+
+    - name: Upload Release AAB Artifact (Google Play Store)
+      uses: actions/upload-artifact@v4
+      with:
+        name: KolekPro-Cam-Release-AAB
+        path: app/build/outputs/bundle/release/*.aab
+        retention-days: 7
+        if-no-files-found: warn
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
@@ -63,5 +108,5 @@ jobs:
       with:
         name: KolekPro-Cam-Debug-APK
         path: app/build/outputs/apk/debug/*.apk
-        retention-days: 1
+        retention-days: 7
         if-no-files-found: warn
