@@ -45,6 +45,7 @@ fun CameraScreen(
     val photoQualityStyle by viewModel.photoQualityStyle.collectAsState()
 
     var noteText by remember { mutableStateOf("") }
+    var showTagDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
         CameraPreviewView(
@@ -131,7 +132,10 @@ fun CameraScreen(
                 locationData = locationData,
                 tagLabel = settings.companyTag,
                 mapBitmap = currentMapThumbnail,
-                modifier = Modifier.fillMaxWidth().testTag("live_watermark_card")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showTagDialog = true }
+                    .testTag("live_watermark_card")
             )
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -241,6 +245,39 @@ fun CameraScreen(
             )
         }
 
-
+        // Quick Tag Edit Dialog when tapping Watermark Card
+        if (showTagDialog) {
+            var tempTag by remember { mutableStateOf(settings.companyTag) }
+            AlertDialog(
+                onDismissRequest = { showTagDialog = false },
+                title = { Text("Ubah Label Tag / Unit", color = Color.White, fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = tempTag,
+                        onValueChange = { tempTag = it },
+                        label = { Text("Nama Tag / Unit") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input_quick_tag")
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.updateSettings(settings.copy(companyTag = tempTag.trim().ifEmpty { "KOLEKPRO" }))
+                            showTagDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    ) {
+                        Text("Simpan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTagDialog = false }) {
+                        Text("Batal", color = Color.White)
+                    }
+                },
+                containerColor = Color(0xFF1E293B)
+            )
+        }
     }
 }

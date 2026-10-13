@@ -102,9 +102,10 @@ fun CameraPreviewView(
 
     AndroidView(
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
-            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-
+            PreviewView(ctx)
+        },
+        update = { previewView ->
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(previewView.context)
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
                 cameraProvider.unbindAll()
@@ -120,10 +121,18 @@ fun CameraPreviewView(
                 try {
                     cameraProvider.bindToLifecycle(lifecycleOwner, cameraSelector, preview, imageCapture)
                     onControllerReady(controller)
-                } catch (_: Exception) {}
-            }, ContextCompat.getMainExecutor(ctx))
-
-            previewView
+                } catch (e: Exception) {
+                    if (lensFacing == CameraSelector.LENS_FACING_FRONT) {
+                        val backSelector = CameraSelector.Builder()
+                            .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                            .build()
+                        try {
+                            cameraProvider.bindToLifecycle(lifecycleOwner, backSelector, preview, imageCapture)
+                            onControllerReady(controller)
+                        } catch (_: Exception) {}
+                    }
+                }
+            }, ContextCompat.getMainExecutor(previewView.context))
         },
         modifier = modifier.fillMaxSize()
     )
