@@ -86,6 +86,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun refreshLocation() {
+        locationManager.startLocationUpdates()
+    }
+
     fun setCameraController(controller: CameraController) {
         this.cameraController = controller
     }

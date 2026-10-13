@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -39,11 +41,16 @@ class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         setContent {
             KolekProCamTheme {
                 var currentScreen by remember { mutableStateOf(AppScreen.CAMERA) }
+
+                BackHandler(enabled = currentScreen != AppScreen.CAMERA) {
+                    currentScreen = AppScreen.CAMERA
+                }
 
                 val requiredPermissions = remember {
                     arrayOf(
@@ -56,7 +63,7 @@ class MainActivity : ComponentActivity() {
                 var hasPermissions by remember {
                     mutableStateOf(
                         requiredPermissions.all {
-                            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+                            ContextCompat.checkSelfPermission(this@MainActivity, it) == PackageManager.PERMISSION_GRANTED
                         }
                     )
                 }
@@ -64,12 +71,18 @@ class MainActivity : ComponentActivity() {
                 val permissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestMultiplePermissions()
                 ) { results ->
-                    hasPermissions = results.values.all { it }
+                    val granted = results.values.all { it }
+                    hasPermissions = granted
+                    if (granted) {
+                        viewModel.refreshLocation()
+                    }
                 }
 
                 LaunchedEffect(Unit) {
                     if (!hasPermissions) {
                         permissionLauncher.launch(requiredPermissions)
+                    } else {
+                        viewModel.refreshLocation()
                     }
                 }
 

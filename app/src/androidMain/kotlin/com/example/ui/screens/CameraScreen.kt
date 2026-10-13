@@ -61,7 +61,8 @@ fun CameraScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 40.dp, start = 16.dp, end = 16.dp)
+                .statusBarsPadding()
+                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                 .align(Alignment.TopCenter),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -138,7 +139,8 @@ fun CameraScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp, start = 12.dp, end = 12.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 12.dp, start = 12.dp, end = 12.dp)
         ) {
             WatermarkOverlayView(
                 locationData = locationData,
