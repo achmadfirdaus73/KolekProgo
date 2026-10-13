@@ -68,10 +68,12 @@ jobs:
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: KolekPro-Cam-Android-APK
           path: app/build/outputs/apk/debug/*.apk
-          retention-days: 14
+          retention-days: 1
+          if-no-files-found: warn
 
   # =========================================================================
   # 2. IOS BUILD JOB
@@ -134,9 +136,11 @@ jobs:
 
       - name: Upload iOS Archive and IPA Artifacts
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: KolekPro-Cam-iOS-IPA
           path: |
             build/KolekProCam.ipa
             build/iosApp.xcarchive
-          retention-days: 14
+          retention-days: 1
+          if-no-files-found: warn
