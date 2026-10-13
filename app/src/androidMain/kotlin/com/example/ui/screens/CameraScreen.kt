@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.example.MainViewModel
 import com.example.ui.components.CameraPreviewView
 import com.example.ui.components.WatermarkOverlayView
+import com.example.watermark.WatermarkStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +47,7 @@ fun CameraScreen(
 
     var noteText by remember { mutableStateOf("") }
     var showTagDialog by remember { mutableStateOf(false) }
+    var showStylePicker by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
         CameraPreviewView(
@@ -132,6 +134,7 @@ fun CameraScreen(
                 locationData = locationData,
                 tagLabel = settings.companyTag,
                 mapBitmap = currentMapThumbnail,
+                watermarkStyle = WatermarkStyle.fromString(settings.watermarkStyle),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showTagDialog = true }
@@ -191,8 +194,22 @@ fun CameraScreen(
                     }
                 }
 
-                // Placeholder space for balance
-                Spacer(modifier = Modifier.size(50.dp))
+                // Watermark Style Picker Button (Right of Shutter)
+                IconButton(
+                    onClick = { showStylePicker = true },
+                    modifier = Modifier
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x660F172A))
+                        .border(1.dp, Color(0x6638BDF8), CircleShape)
+                        .testTag("btn_watermark_style_picker")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = "Pilih Gaya Watermark",
+                        tint = Color(0xFF38BDF8)
+                    )
+                }
             }
         }
 
@@ -278,6 +295,78 @@ fun CameraScreen(
                 },
                 containerColor = Color(0xFF1E293B)
             )
+        }
+
+        // Watermark Style Selection ModalBottomSheet
+        if (showStylePicker) {
+            ModalBottomSheet(
+                onDismissRequest = { showStylePicker = false },
+                containerColor = Color(0xFF1E293B)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        "Pilih Desain Watermark",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    WatermarkStyle.values().forEach { style ->
+                        val isSelected = style.name == settings.watermarkStyle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) Color(0xFF2563EB) else Color(0xFF0F172A))
+                                .clickable {
+                                    viewModel.updateWatermarkStyle(style)
+                                    showStylePicker = false
+                                }
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = style.title,
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = when(style) {
+                                        WatermarkStyle.MODERN_DARK_BOTTOM_LEFT -> "Modern Dark Bottom Left"
+                                        WatermarkStyle.MODERN_DARK_BOTTOM_RIGHT -> "Modern Dark Bottom Right"
+                                        WatermarkStyle.MODERN_LIGHT_BOTTOM_RIGHT -> "Modern Light Bottom Right"
+                                        WatermarkStyle.MODERN_LIGHT_BOTTOM_LEFT -> "Modern Light Bottom Left"
+                                        WatermarkStyle.MINIMAL_DARK_TOP_LEFT -> "Minimal Dark Top Left"
+                                        WatermarkStyle.MODERN_LIGHT_BOTTOM_CENTER -> "Modern Light Bottom Center"
+                                        WatermarkStyle.VERTICAL_DARK_LEFT -> "Vertical Dark Left"
+                                        WatermarkStyle.ROUNDED_DARK_BOTTOM_LEFT -> "Rounded Dark Bottom Left"
+                                    },
+                                    color = Color(0xFF94A3B8),
+                                    fontSize = 12.sp
+                                )
+                            }
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Dipilih",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
         }
     }
 }

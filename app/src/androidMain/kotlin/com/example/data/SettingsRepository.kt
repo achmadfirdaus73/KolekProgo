@@ -14,6 +14,7 @@ data class AppSettings(
     val resolutionPreset: String = AppConfig.DEFAULT_RESOLUTION_PRESET,
     val autoSyncToSpreadsheet: Boolean = true,
     val includeThumbnailInSync: Boolean = true,
+    val watermarkStyle: String = "MODERN_GLASS",
     val colTimestamp: String = "A",
     val colDate: String = "B",
     val colTag: String = "C",
@@ -40,7 +41,8 @@ class SettingsRepository(context: Context) {
             compressionQuality = prefs.getInt("compression_quality", AppConfig.DEFAULT_COMPRESSION_QUALITY),
             resolutionPreset = prefs.getString("resolution_preset", AppConfig.DEFAULT_RESOLUTION_PRESET) ?: AppConfig.DEFAULT_RESOLUTION_PRESET,
             autoSyncToSpreadsheet = prefs.getBoolean("auto_sync", true),
-            includeThumbnailInSync = prefs.getBoolean("include_thumb", true)
+            includeThumbnailInSync = prefs.getBoolean("include_thumb", true),
+            watermarkStyle = prefs.getString("watermark_style", "MODERN_GLASS") ?: "MODERN_GLASS"
         )
     }
 
@@ -52,6 +54,7 @@ class SettingsRepository(context: Context) {
             putString("resolution_preset", newSettings.resolutionPreset)
             putBoolean("auto_sync", newSettings.autoSyncToSpreadsheet)
             putBoolean("include_thumb", newSettings.includeThumbnailInSync)
+            putString("watermark_style", newSettings.watermarkStyle)
             apply()
         }
         _settings.value = newSettings

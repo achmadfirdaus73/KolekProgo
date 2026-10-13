@@ -21,13 +21,35 @@ import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
+enum class WatermarkStyle(val title: String) {
+    MODERN_DARK_BOTTOM_LEFT("Modern Dark Bottom Left"),
+    MODERN_DARK_BOTTOM_RIGHT("Modern Dark Bottom Right"),
+    MODERN_LIGHT_BOTTOM_RIGHT("Modern Light Bottom Right"),
+    MODERN_LIGHT_BOTTOM_LEFT("Modern Light Bottom Left"),
+    MINIMAL_DARK_TOP_LEFT("Minimal Dark Top Left"),
+    MODERN_LIGHT_BOTTOM_CENTER("Modern Light Bottom Center"),
+    VERTICAL_DARK_LEFT("Vertical Dark Left"),
+    ROUNDED_DARK_BOTTOM_LEFT("Rounded Dark Bottom Left");
+
+    companion object {
+        fun fromString(value: String): WatermarkStyle {
+            return try {
+                valueOf(value)
+            } catch (_: Exception) {
+                MODERN_DARK_BOTTOM_LEFT
+            }
+        }
+    }
+}
+
 data class WatermarkConfig(
     val tagLabel: String = "KOLEKPRO",
     val qualityPercentage: Int = 95,
     val maxDimension: Int = 3840,
     val showDynamicMap: Boolean = true,
     val showSecurityToken: Boolean = true,
-    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA
+    val qualityStyle: PhotoQualityStyle = PhotoQualityStyle.SMART_HDR_ULTRA,
+    val watermarkStyle: WatermarkStyle = WatermarkStyle.MODERN_DARK_BOTTOM_LEFT
 )
 
 data class WatermarkResult(
@@ -72,47 +94,144 @@ object WatermarkRenderer {
         val isTampered = securityResult.isMockDetected || securityResult.isTimeManipulated
         val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
 
-        // Clip rounded card and draw transparent background map texture
-        canvas.save()
-        val path = Path().apply {
-            addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW)
+        // Draw style-specific card background and borders
+        when (config.watermarkStyle) {
+            WatermarkStyle.MODERN_DARK_BOTTOM_LEFT -> WatermarkStyles.drawModernDarkBottomLeft(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.MODERN_DARK_BOTTOM_RIGHT -> WatermarkStyles.drawModernDarkBottomRight(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.MODERN_LIGHT_BOTTOM_RIGHT -> WatermarkStyles.drawModernLightBottomRight(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.MODERN_LIGHT_BOTTOM_LEFT -> WatermarkStyles.drawModernLightBottomLeft(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.MINIMAL_DARK_TOP_LEFT -> WatermarkStyles.drawMinimalDarkTopLeft(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.MODERN_LIGHT_BOTTOM_CENTER -> WatermarkStyles.drawModernLightBottomCenter(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.VERTICAL_DARK_LEFT -> WatermarkStyles.drawVerticalDarkLeft(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
+            WatermarkStyle.ROUNDED_DARK_BOTTOM_LEFT -> WatermarkStyles.drawRoundedDarkBottomLeft(canvas, context, locationData, securityResult, config, cardRect, cornerRadius, scale, customMapThumbnail)
         }
+
+        val stream = ByteArrayOutputStream()
+        outputBitmap.compress(Bitmap.CompressFormat.JPEG, config.qualityPercentage.coerceIn(40, 100), stream)
+        val compressedBytes = stream.toByteArray()
+
+        return WatermarkResult(
+            bitmap = outputBitmap,
+            jpegBytes = compressedBytes,
+            fileSizeBytes = compressedBytes.size.toLong(),
+            originalSizeBytes = originalRawSize,
+            compressionRatioPercent = 0,
+            integrityHash = securityResult.integrityHash
+        )
+    }
+
+    private fun drawModernGlassStyle(
+        canvas: Canvas, context: Context, locationData: LiveLocationData,
+        securityResult: SecurityCheckResult, config: WatermarkConfig,
+        cardRect: RectF, cornerRadius: Float, scale: Float, customMapThumbnail: Bitmap?
+    ) {
+        val isTampered = securityResult.isMockDetected || securityResult.isTimeManipulated
+        canvas.save()
+        val path = Path().apply { addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW) }
         canvas.clipPath(path)
 
-        val mapTile = customMapThumbnail ?: MapTileHelper.getRawTileSync(
-            context = context,
-            lat = locationData.latitude,
-            lon = locationData.longitude,
-            zoom = 16
-        )
-        val mapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-            alpha = 135
-        }
-        canvas.drawBitmap(mapTile, null, cardRect, mapPaint)
-
-        val overlayPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(170, 15, 23, 42)
-            style = Paint.Style.FILL
-        }
-        canvas.drawRect(cardRect, overlayPaint)
+        val mapTile = customMapThumbnail ?: MapTileHelper.getRawTileSync(context, locationData.latitude, locationData.longitude, 16)
+        canvas.drawBitmap(mapTile, null, cardRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 135 })
+        canvas.drawRect(cardRect, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(170, 15, 23, 42); style = Paint.Style.FILL })
         canvas.restore()
 
-        val cardBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isTampered) {
-                Color.argb(180, 239, 68, 68)
-            } else {
-                Color.argb(70, 255, 255, 255)
-            }
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (isTampered) Color.argb(180, 239, 68, 68) else Color.argb(70, 255, 255, 255)
             style = Paint.Style.STROKE
             strokeWidth = 2.0f * scale
-        }
-        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, cardBorderPaint)
+        })
 
+        drawStandardContent(canvas, locationData, securityResult, config, cardRect, scale)
+    }
+
+    private fun drawExecutiveBadgeStyle(
+        canvas: Canvas, context: Context, locationData: LiveLocationData,
+        securityResult: SecurityCheckResult, config: WatermarkConfig,
+        cardRect: RectF, cornerRadius: Float, scale: Float, customMapThumbnail: Bitmap?
+    ) {
+        canvas.save()
+        val path = Path().apply { addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW) }
+        canvas.clipPath(path)
+
+        canvas.drawRect(cardRect, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#0F172A"); style = Paint.Style.FILL })
+        // Corporate blue banner header
+        val headerRect = RectF(cardRect.left, cardRect.top, cardRect.right, cardRect.top + 45f * scale)
+        canvas.drawRect(headerRect, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E3A8A"); style = Paint.Style.FILL })
+        canvas.restore()
+
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#3B82F6")
+            style = Paint.Style.STROKE
+            strokeWidth = 2.2f * scale
+        })
+
+        val pad = 20f * scale
+        // Draw Header Tag
+        val tagPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = 18f * scale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = 0.1f
+        }
+        canvas.drawText("EXECUTIVE AUDIT • ${config.tagLabel.uppercase(Locale.ROOT)}", cardRect.left + pad, cardRect.top + 28f * scale, tagPaint)
+
+        drawStandardContent(canvas, locationData, securityResult, config, RectF(cardRect.left, cardRect.top + 40f * scale, cardRect.right, cardRect.bottom), scale)
+    }
+
+    private fun drawCyberpunkHudStyle(
+        canvas: Canvas, context: Context, locationData: LiveLocationData,
+        securityResult: SecurityCheckResult, config: WatermarkConfig,
+        cardRect: RectF, cornerRadius: Float, scale: Float, customMapThumbnail: Bitmap?
+    ) {
+        canvas.save()
+        val path = Path().apply { addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW) }
+        canvas.clipPath(path)
+        canvas.drawRect(cardRect, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#050B14"); style = Paint.Style.FILL })
+        canvas.restore()
+
+        // Neon cyan/emerald borders
+        val hudBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#38BDF8")
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * scale
+        }
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, hudBorder)
+
+        drawStandardContent(canvas, locationData, securityResult, config, cardRect, scale)
+    }
+
+    private fun drawClassicStampStyle(
+        canvas: Canvas, context: Context, locationData: LiveLocationData,
+        securityResult: SecurityCheckResult, config: WatermarkConfig,
+        cardRect: RectF, cornerRadius: Float, scale: Float, customMapThumbnail: Bitmap?
+    ) {
+        canvas.save()
+        val path = Path().apply { addRoundRect(cardRect, cornerRadius, cornerRadius, Path.Direction.CW) }
+        canvas.clipPath(path)
+        canvas.drawRect(cardRect, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1E293B"); style = Paint.Style.FILL })
+        canvas.restore()
+
+        val stampBorder = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#94A3B8")
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * scale
+        }
+        val innerRect = RectF(cardRect.left + 6f * scale, cardRect.top + 6f * scale, cardRect.right - 6f * scale, cardRect.bottom - 6f * scale)
+        canvas.drawRoundRect(cardRect, cornerRadius, cornerRadius, stampBorder)
+        canvas.drawRoundRect(innerRect, cornerRadius - 4f, cornerRadius - 4f, stampBorder)
+
+        drawStandardContent(canvas, locationData, securityResult, config, cardRect, scale)
+    }
+
+    private fun drawStandardContent(
+        canvas: Canvas, locationData: LiveLocationData, securityResult: SecurityCheckResult,
+        config: WatermarkConfig, cardRect: RectF, scale: Float
+    ) {
         val pad = 24f * scale
-        val contentLeft = cardLeft + pad
-        val contentTop = cardTop + pad
-        val contentBottom = cardBottom - pad
-        val contentRight = cardRight - pad
+        val contentLeft = cardRect.left + pad
+        val contentTop = cardRect.top + pad
+        val contentBottom = cardRect.bottom - pad
+        val contentRight = cardRect.right - pad
 
         val leftColWidth = 240f * scale
         val shadowRadius = 4f * scale
@@ -142,12 +261,7 @@ object WatermarkRenderer {
             setShadowLayer(shadowRadius * 1.5f, 0f, shadowDy * 1.5f, shadowColor)
         }
         val timeText = locationData.formattedTime.ifEmpty { "18:16" }
-        canvas.drawText(
-            timeText,
-            contentLeft,
-            contentTop + 84f * scale,
-            clockPaint
-        )
+        canvas.drawText(timeText, contentLeft, contentTop + 84f * scale, clockPaint)
 
         // 3. Date
         val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -157,12 +271,7 @@ object WatermarkRenderer {
             setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
         val dateText = locationData.formattedDate.ifEmpty { "10 Okt 2026" }
-        canvas.drawText(
-            dateText,
-            contentLeft,
-            contentTop + 124f * scale,
-            datePaint
-        )
+        canvas.drawText(dateText, contentLeft, contentTop + 124f * scale, datePaint)
 
         // 4. Status Pill
         drawSecurityPill(canvas, securityResult, contentLeft, contentTop + 158f * scale, scale)
@@ -187,9 +296,7 @@ object WatermarkRenderer {
             setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
 
-        val fullAddress = locationData.address.ifEmpty {
-            "Jl. Raya No. 1, Jakarta, Indonesia"
-        }
+        val fullAddress = locationData.address.ifEmpty { "Jl. Raya No. 1, Jakarta, Indonesia" }
 
         val addressLayout = StaticLayout.Builder.obtain(
             fullAddress, 0, fullAddress.length, addressPaint, midWidth.toInt()
@@ -220,19 +327,6 @@ object WatermarkRenderer {
             setShadowLayer(shadowRadius, 0f, shadowDy, shadowColor)
         }
         canvas.drawText("SIG: #${securityResult.signatureToken} • LIVE ENCRYPTED", midLeft, contentBottom - 6f * scale, stampPaint)
-
-        val stream = ByteArrayOutputStream()
-        outputBitmap.compress(Bitmap.CompressFormat.JPEG, config.qualityPercentage.coerceIn(40, 100), stream)
-        val compressedBytes = stream.toByteArray()
-
-        return WatermarkResult(
-            bitmap = outputBitmap,
-            jpegBytes = compressedBytes,
-            fileSizeBytes = compressedBytes.size.toLong(),
-            originalSizeBytes = originalRawSize,
-            compressionRatioPercent = 0,
-            integrityHash = securityResult.integrityHash
-        )
     }
 
     private fun drawSecurityPill(canvas: Canvas, security: SecurityCheckResult, x: Float, y: Float, scale: Float) {

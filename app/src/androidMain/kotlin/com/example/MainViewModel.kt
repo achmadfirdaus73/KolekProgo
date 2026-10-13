@@ -23,6 +23,7 @@ import com.example.util.StorageHelper
 import com.example.watermark.WatermarkConfig
 import com.example.watermark.WatermarkRenderer
 import com.example.watermark.WatermarkResult
+import com.example.watermark.WatermarkStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -133,7 +134,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val config = WatermarkConfig(
                             tagLabel = settings.value.companyTag,
                             qualityPercentage = settings.value.compressionQuality,
-                            qualityStyle = _photoQualityStyle.value
+                            qualityStyle = _photoQualityStyle.value,
+                            watermarkStyle = WatermarkStyle.fromString(settings.value.watermarkStyle)
                         )
 
                         val result = WatermarkRenderer.applyWatermarkAndCompress(
@@ -220,6 +222,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(newSettings: AppSettings) {
         settingsRepository.updateSettings(newSettings)
+    }
+
+    fun updateWatermarkStyle(style: WatermarkStyle) {
+        settingsRepository.updateSettings(settings.value.copy(watermarkStyle = style.name))
     }
 
     fun manualSyncPhoto(photo: PhotoRecord, onComplete: (Boolean, String) -> Unit) {
