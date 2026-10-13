@@ -34,6 +34,6 @@ object AppConfig {
      */
     fun isSpreadsheetConfigured(): Boolean {
         val url = SPREADSHEET_WEBAPP_URL.trim()
-        return url.startsWith("https://") && !url.contains("AKfycbyi_MYiM29y91ctqPng6_4Jf9svfxf2ZhXsPvuJ79R9DU0yf2lce9iGyJFBq9HTkLgB")
+        return url.startsWith("https://") && !url.contains("YOUR_APPS_SCRIPT_ID_HERE") && url.length > 30
     }
 }

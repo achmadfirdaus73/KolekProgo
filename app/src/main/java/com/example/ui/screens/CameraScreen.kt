@@ -1,371 +1,174 @@
 package com.example.ui.screens
 
+import android.content.Context
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Brightness6
-import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FlashAuto
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.MainViewModel
-import com.example.data.PhotoRecord
 import com.example.ui.components.CameraPreviewView
 import com.example.ui.components.WatermarkOverlayView
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
     viewModel: MainViewModel,
-    locationData: com.example.location.LiveLocationData,
-    settings: com.example.data.AppSettings,
-    photos: List<PhotoRecord>,
-    isCapturing: Boolean,
-    onNavigateToGallery: () -> Unit,
-    modifier: Modifier = Modifier
+    onNavigateToGallery: () -> Unit
 ) {
-    var showTagDialog by remember { mutableStateOf(false) }
-    var tempTag by remember { mutableStateOf(settings.companyTag) }
-
+    val locationData by viewModel.locationData.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+    val isCapturing by viewModel.isCapturing.collectAsState()
+    val capturedResult by viewModel.capturedResult.collectAsState()
     val lensFacing by viewModel.lensFacing.collectAsState()
     val flashMode by viewModel.flashMode.collectAsState()
-    val gridEnabled by viewModel.gridEnabled.collectAsState()
-    val exposureBoost by viewModel.exposureBoost.collectAsState()
     val currentMapThumbnail by viewModel.currentMapThumbnail.collectAsState()
-    val iphoneStyle by viewModel.iphoneStyle.collectAsState()
+    val photoQualityStyle by viewModel.photoQualityStyle.collectAsState()
 
-    val isMock = locationData.securityResult.isMockDetected
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    var noteText by remember { mutableStateOf("") }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .testTag("camera_screen")
-    ) {
-        // 1. CAMERAX PREVIEW (Using SurfaceView performance mode to eliminate dark/black screen)
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
         CameraPreviewView(
             lensFacing = lensFacing,
             flashMode = flashMode,
-            exposureBoostIndex = exposureBoost,
             onControllerReady = { controller ->
-                viewModel.cameraController = controller
+                viewModel.setCameraController(controller)
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. GRID OVERLAY (IF ENABLED)
-        if (gridEnabled) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stepX = size.width / 3
-                val stepY = size.height / 3
-                val gridColor = Color(0x35FFFFFF)
-
-                drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(stepX, 0f), end = androidx.compose.ui.geometry.Offset(stepX, size.height), strokeWidth = 1f)
-                drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(stepX * 2, 0f), end = androidx.compose.ui.geometry.Offset(stepX * 2, size.height), strokeWidth = 1f)
-                drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(0f, stepY), end = androidx.compose.ui.geometry.Offset(size.width, stepY), strokeWidth = 1f)
-                drawLine(gridColor, start = androidx.compose.ui.geometry.Offset(0f, stepY * 2), end = androidx.compose.ui.geometry.Offset(size.width, stepY * 2), strokeWidth = 1f)
-            }
-        }
-
-        // 3. TOP CONTROLS & STATUS BAR (Light gradient so camera is bright and clear)
-        Column(
+        // Top Controls Bar
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color(0x55000000), Color.Transparent)
-                    )
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(top = 40.dp, start = 16.dp, end = 16.dp)
+                .align(Alignment.TopCenter),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            IconButton(
+                onClick = { viewModel.cycleFlashMode() },
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(Color(0x660F172A))
+                    .testTag("btn_flash_toggle")
             ) {
-                val isTimeFake = locationData.securityResult.isTimeManipulated
-                val isTampered = isMock || isTimeFake
-                val topStatusText = when {
-                    isTimeFake && isMock -> "WAKTU & GPS DIMANIPULASI"
-                    isTimeFake -> "JAM SISTEM DIMANIPULASI"
-                    isMock -> "FAKE GPS TERDETEKSI"
-                    else -> "LOKASI ASLI ±${locationData.accuracy.toInt()}m"
-                }
-
-                // Security / Anti-Fake Status Pill
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (isTampered) Color(0xD9DC2626) else Color(0xD9059669))
-                        .border(1.dp, if (isTampered) Color(0xFFFCA5A5) else Color(0xFF6EE7B7), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (isTampered) Icons.Default.Warning else Icons.Default.Security,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = topStatusText,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Camera Controls (Exposure Brightness, Flash, Grid, Switch)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Brightness / Exposure Boost Toggle (+0, +2, +4)
-                    IconButton(
-                        onClick = { viewModel.cycleExposureBoost() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                if (exposureBoost > 0) Color(0xCCF59E0B) else Color(0x55000000),
-                                CircleShape
-                            )
-                            .testTag("btn_exposure_boost")
-                    ) {
-                        Icon(
-                            Icons.Default.Brightness6,
-                            contentDescription = "Pencerah Kamera",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Flash Mode Toggle
-                    IconButton(
-                        onClick = { viewModel.cycleFlashMode() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(Color(0x55000000), CircleShape)
-                            .testTag("btn_flash_toggle")
-                    ) {
-                        val flashIcon = when (flashMode) {
-                            ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
-                            ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
-                            else -> Icons.Default.FlashOff
-                        }
-                        Icon(flashIcon, contentDescription = "Flash", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-
-                    // Grid Toggle
-                    IconButton(
-                        onClick = { viewModel.toggleGrid() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(if (gridEnabled) Color(0x992563EB) else Color(0x55000000), CircleShape)
-                            .testTag("btn_grid_toggle")
-                    ) {
-                        Icon(Icons.Default.GridOn, contentDescription = "Grid", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-
-                    // Switch Camera Lens
-                    IconButton(
-                        onClick = { viewModel.toggleLensFacing() },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(Color(0x55000000), CircleShape)
-                            .testTag("btn_switch_camera")
-                    ) {
-                        Icon(Icons.Default.Cameraswitch, contentDescription = "Ganti Kamera", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                }
+                Icon(
+                    imageVector = when (flashMode) {
+                        ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
+                        ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
+                        else -> Icons.Default.FlashOff
+                    },
+                    contentDescription = "Flash Mode",
+                    tint = Color.White
+                )
             }
 
-            // Smart HDR & Photo Clarity Quality Selector (no iPhone text)
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+            // Quality Style Badge
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color(0x880F172A))
+                    .border(1.dp, Color(0x6638BDF8), RoundedCornerShape(20.dp))
+                    .clickable { viewModel.cyclePhotoQualityStyle() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("btn_quality_style")
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xD90F172A))
-                        .border(
-                            1.dp,
-                            if (iphoneStyle != com.example.camera.PhotoQualityStyle.OFF) Color(0x8838BDF8) else Color(0x44FFFFFF),
-                            RoundedCornerShape(20.dp)
-                        )
-                        .clickable { viewModel.cyclePhotoQualityStyle() }
-                        .padding(horizontal = 12.dp, vertical = 5.dp)
-                        .testTag("btn_photo_quality_toggle")
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Tone HDR",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = iphoneStyle.title,
-                            color = Color.White,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(Color(0x3338BDF8))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "HDR",
-                                color = Color(0xFF38BDF8),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
+                Text(
+                    text = photoQualityStyle.title,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            // Warning Banner if Fake GPS is detected
-            AnimatedVisibility(
-                visible = isMock,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Box(
+            Row {
+                IconButton(
+                    onClick = { viewModel.toggleLensFacing() },
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xEE7F1D1D))
-                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(8.dp))
-                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x660F172A))
+                        .testTag("btn_switch_camera")
                 ) {
-                    Text(
-                        text = "PERINGATAN SISTEM: Lokasi tiruan / Fake GPS terdeteksi pada perangkat ini. Foto akan ditandai dengan label ketidakaslian data.",
-                        color = Color.White,
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                    Icon(
+                        imageVector = Icons.Default.Cameraswitch,
+                        contentDescription = "Switch Camera",
+                        tint = Color.White
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = { showSettingsSheet = true },
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color(0x660F172A))
+                        .testTag("btn_settings")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = Color.White
                     )
                 }
             }
         }
 
-        // 4. BOTTOM WATERMARK OVERLAY & SHUTTER PANEL (Subtle gradient, preserving viewfinder brightness)
+        // Bottom Controls with Watermark Overlay
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color(0x44000000))
-                    )
-                )
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(bottom = 24.dp, start = 12.dp, end = 12.dp)
         ) {
-            // Live Real-Time Watermark Overlay (Showing real pinpoint map + high transparency)
             WatermarkOverlayView(
                 locationData = locationData,
                 tagLabel = settings.companyTag,
                 mapBitmap = currentMapThumbnail,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showTagDialog = true }
-                    .testTag("live_watermark_card")
+                modifier = Modifier.fillMaxWidth().testTag("live_watermark_card")
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Action Bar (Tag selector, Big Shutter, Gallery preview shortcut)
+            // Action row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceAround
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Quick Tag Chip
-                Box(
+                // Gallery button
+                IconButton(
+                    onClick = onNavigateToGallery,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0x661E293B))
-                        .border(1.dp, Color(0x5538BDF8), RoundedCornerShape(20.dp))
-                        .clickable {
-                            tempTag = settings.companyTag
-                            showTagDialog = true
-                        }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .testTag("btn_change_tag")
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x660F172A))
+                        .testTag("btn_quick_gallery")
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Tag",
-                            tint = Color(0xFF38BDF8),
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = settings.companyTag,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.PhotoLibrary,
+                        contentDescription = "Buka Galeri",
+                        tint = Color.White
+                    )
                 }
 
                 // Shutter Button
@@ -397,66 +200,141 @@ fun CameraScreen(
                     }
                 }
 
-                // Gallery Shortcut Button
-                Box(
+                // Placeholder space for balance
+                Spacer(modifier = Modifier.size(50.dp))
+            }
+        }
+
+        // Preview Captured Dialog
+        if (capturedResult != null) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissPreview() },
+                title = { Text("Pratinjau Foto Watermark", color = Color.White) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Image(
+                            bitmap = capturedResult!!.bitmap.asImageBitmap(),
+                            contentDescription = "Foto Watermark",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = noteText,
+                            onValueChange = { noteText = it },
+                            label = { Text("Catatan Kunjungan (Opsional)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.saveToGalleryAndLocal(noteText)
+                            noteText = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        modifier = Modifier.testTag("btn_save_photo")
+                    ) {
+                        Text("Simpan & Sinkron")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { viewModel.dismissPreview() },
+                        modifier = Modifier.testTag("btn_discard_photo")
+                    ) {
+                        Text("Ulangi", color = Color.White)
+                    }
+                },
+                containerColor = Color(0xFF1E293B)
+            )
+        }
+
+        // Settings Bottom Sheet
+        if (showSettingsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSettingsSheet = false },
+                containerColor = Color(0xFF1E293B)
+            ) {
+                var currentTag by remember { mutableStateOf(settings.companyTag) }
+                var currentUrl by remember { mutableStateOf(settings.spreadsheetUrl) }
+                var autoSync by remember { mutableStateOf(settings.autoSyncToSpreadsheet) }
+
+                Column(
                     modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x661E293B))
-                        .border(1.dp, Color(0x44FFFFFF), RoundedCornerShape(12.dp))
-                        .clickable { onNavigateToGallery() }
-                        .testTag("btn_quick_gallery"),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = "Buka Riwayat",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                    Text(
+                        "Pengaturan KolekPro Cam",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = Color.White
                     )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = currentTag,
+                        onValueChange = { currentTag = it },
+                        label = { Text("Label Tag Perusahaan / Unit") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_company_tag")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedTextField(
+                        value = currentUrl,
+                        onValueChange = { currentUrl = it },
+                        label = { Text("URL Web App Google Sheets") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_spreadsheet_url"),
+                        maxLines = 2
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Otomatis Sinkronisasi ke Spreadsheet",
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                        Switch(
+                            checked = autoSync,
+                            onCheckedChange = { autoSync = it },
+                            modifier = Modifier.testTag("switch_auto_sync")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.updateSettings(
+                                settings.copy(
+                                    companyTag = currentTag.trim().ifEmpty { "KOLEKPRO" },
+                                    spreadsheetUrl = currentUrl.trim(),
+                                    autoSyncToSpreadsheet = autoSync
+                                )
+                            )
+                            showSettingsSheet = false
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("btn_save_settings"),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                    ) {
+                        Text("Simpan Pengaturan")
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
-    }
-
-    // DIALOG QUICK EDIT TAG
-    if (showTagDialog) {
-        AlertDialog(
-            onDismissRequest = { showTagDialog = false },
-            title = { Text("Ubah Label Watermark") },
-            text = {
-                Column {
-                    Text(
-                        "Label ini akan dicetak di sudut watermark foto:",
-                        fontSize = 13.sp,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = tempTag,
-                        onValueChange = { tempTag = it },
-                        singleLine = true,
-                        placeholder = { Text("KOLEKPRO / NAMA TIM") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val cleaned = tempTag.trim().ifEmpty { "KOLEKPRO" }
-                        viewModel.updateCompanyTag(cleaned)
-                        showTagDialog = false
-                    }
-                ) {
-                    Text("Terapkan")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTagDialog = false }) {
-                    Text("Batal")
-                }
-            }
-        )
     }
 }

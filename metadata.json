@@ -1,6 +1,6 @@
 {
   "name": "KolekPro Cam",
-  "description": "Kamera watermark GPS & waktu real-time dengan proteksi anti fake lokasi, verifikasi integritas, preview tangkapan, kompresi otomatis, dan sinkronisasi Google Sheets terenkripsi.",
+  "description": "Aplikasi kamera watermark profesional dengan anti-fake GPS, verifikasi keaslian waktu, peta presisi OpenStreetMap, dan sinkronisasi otomatis Google Sheets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

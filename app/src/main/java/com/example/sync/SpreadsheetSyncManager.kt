@@ -29,21 +29,12 @@ class SpreadsheetSyncManager(private val context: Context) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
-        .writeTimeout(25, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
         .build()
 
-    suspend fun sendPhotoRecord(
-        photo: PhotoRecord,
-        settings: AppSettings
-    ): SyncResult = withContext(Dispatchers.IO) {
-        val url = if (AppConfig.isSpreadsheetConfigured()) {
-            AppConfig.SPREADSHEET_WEBAPP_URL.trim()
-        } else if (settings.spreadsheetUrl.isNotBlank() && !settings.spreadsheetUrl.contains("YOUR_APPS_SCRIPT_ID_HERE")) {
-            settings.spreadsheetUrl.trim()
-        } else {
-            return@withContext SyncResult.Error("URL Web App belum diisi di kode (AppConfig.kt). Buka file AppConfig.kt dan tempelkan URL Web App Anda.")
+    suspend fun syncPhoto(photo: PhotoRecord, settings: AppSettings): SyncResult = withContext(Dispatchers.IO) {
+        val url = settings.spreadsheetUrl.trim()
+        if (url.isEmpty() || !url.startsWith("https://")) {
+            return@withContext SyncResult.Error("URL Webhook Google Sheets belum diatur.")
         }
 
         try {
@@ -75,23 +66,11 @@ class SpreadsheetSyncManager(private val context: Context) {
                 put("isMock", photo.isMockDetected)
                 put("isTimeManipulated", photo.isTimeManipulated)
                 put("deviceModel", photo.cameraStyle)
-                put("cameraSpecs", "Smart HDR 24mm f/1.8 High Clarity")
+                put("cameraSpecs", "Smart HDR High Clarity")
                 put("integrityHash", photo.integrityHash)
                 put("signatureToken", photo.signatureToken)
                 put("note", photo.note)
                 put("fileSizeBytes", photo.fileSizeBytes)
-                put("columnMapping", JSONObject().apply {
-                    put("colTimestamp", settings.colTimestamp)
-                    put("colDate", settings.colDate)
-                    put("colTag", settings.colTag)
-                    put("colAddress", settings.colAddress)
-                    put("colLatitude", settings.colLatitude)
-                    put("colLongitude", settings.colLongitude)
-                    put("colStatus", settings.colStatus)
-                    put("colIntegrityHash", settings.colIntegrityHash)
-                    put("colNote", settings.colNote)
-                    put("colThumbnail", settings.colThumbnail)
-                })
                 if (thumbnailBase64.isNotEmpty()) {
                     put("thumbnailBase64", thumbnailBase64)
                 }
@@ -120,53 +99,13 @@ class SpreadsheetSyncManager(private val context: Context) {
         }
     }
 
-    suspend fun testConnection(url: String): SyncResult = withContext(Dispatchers.IO) {
-        val trimmed = url.trim()
-        if (trimmed.isEmpty()) {
-            return@withContext SyncResult.Error("URL Spreadsheet tidak boleh kosong.")
-        }
-        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-            return@withContext SyncResult.Error("URL harus diawali dengan https://")
-        }
-
-        try {
-            val testJson = JSONObject().apply {
-                put("action", "test_connection")
-                put("timestamp", "TEST KONEKSI KOLEKPRO")
-                put("date", "Tes Tanggal")
-                put("tag", "TEST_KOLEKPRO")
-                put("address", "Uji Coba Integrasi Spreadsheet Berhasil")
-                put("latitude", -6.175392)
-                put("longitude", 106.827153)
-                put("status", "KONEKSI BERHASIL")
-                put("note", "Pengujian baris berhasil diterima dari aplikasi Android")
-            }
-
-            val body = testJson.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
-            val request = Request.Builder()
-                .url(trimmed)
-                .post(body)
-                .addHeader("User-Agent", "KolekProCam-Android/1.0")
-                .build()
-
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful || response.code == 302) {
-                SyncResult.Success("Koneksi ke Google Sheets Berhasil! Endpoint merespon dengan baik.")
-            } else {
-                SyncResult.Error("Endpoint merespon dengan error HTTP ${response.code}")
-            }
-        } catch (e: Exception) {
-            SyncResult.Error("Tidak dapat terhubung ke URL: ${e.localizedMessage}")
-        }
-    }
-
     private fun generateHighResPhotoBase64(file: File): String {
         return try {
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
             BitmapFactory.decodeFile(file.absolutePath, options)
-            val maxDim = 1440 // High-Definition HD resolution for Google Drive & Spreadsheet
+            val maxDim = 1440
             var inSampleSize = 1
             if (options.outHeight > maxDim || options.outWidth > maxDim) {
                 val halfHeight: Int = options.outHeight / 2
@@ -180,7 +119,7 @@ class SpreadsheetSyncManager(private val context: Context) {
                 this.inSampleSize = inSampleSize
             }
             val bmp = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return ""
-            
+
             val w = bmp.width
             val h = bmp.height
             val scaledBmp = if (w > maxDim || h > maxDim) {
@@ -215,116 +154,18 @@ class SpreadsheetSyncManager(private val context: Context) {
             return """
 /**
  * KOLEKPRO CAM - Google Sheets & Drive Webhook Script
- * ---------------------------------------------------
- * Cara Pemasangan:
- * 1. Di Google Sheets, klik menu 'Ekstensi' > 'Apps Script'
- * 2. Hapus semua teks yang ada, lalu paste seluruh skrip ini
- * 3. Klik tombol 'Deploy' (Terapkan) > 'New Deployment' (Penerapan baru)
- * 4. Pilih tipe: 'Web app' (Aplikasi web)
- * 5. Set 'Execute as' (Jalankan sebagai): 'Me' (Saya)
- * 6. Set 'Who has access' (Yang memiliki akses): 'Anyone' (Siapa saja)
- * 7. Klik 'Deploy', izinkan izin Google, lalu SALIN Web App URL (berakhiran /exec)
- * 8. Tempelkan URL tersebut ke dalam aplikasi KolekPro Cam!
  */
-
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getActiveSheet();
-    
-    // Pastikan header sudah ada jika sheet baru kosong
-    if (sheet.getLastRow() === 0) {
-      sheet.appendRow([
-        "Waktu & Tanggal",
-        "Tanggal",
-        "Unit/Tag",
-        "Alamat Lengkap",
-        "Latitude",
-        "Longitude",
-        "Status Keaslian",
-        "Hash Integritas (Anti-Tamper)",
-        "Catatan",
-        "Pratinjau Foto (Drive)",
-        "Link Drive Foto"
-      ]);
-      // Format header
-      sheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#0F172A").setFontColor("#FFFFFF");
-      sheet.setRowHeight(1, 32);
-    }
-
     var contents = e.postData.contents;
     var data = JSON.parse(contents);
-    
-    var time = data.timestamp || new Date().toLocaleString("id-ID");
-    var date = data.date || "";
-    var tag = data.tag || "KOLEKPRO";
-    var address = data.address || "";
-    var lat = data.latitude || "";
-    var lon = data.longitude || "";
-    var status = data.status || (data.isMock ? "PERINGATAN: FAKE GPS" : "ASLI TERVERIFIKASI");
-    var integrityHash = data.integrityHash || "";
-    var note = data.note || "";
-    
-    var imageFormula = "Tidak ada foto";
-    var driveLink = "";
-
-    // Upload otomatis gambar ke Google Drive dan tampilkan preview di Spreadsheet
-    if (data.thumbnailBase64 && data.thumbnailBase64.length > 0) {
-      try {
-        var folders = DriveApp.getFoldersByName("KolekPro_Photos");
-        var folder;
-        if (folders.hasNext()) {
-          folder = folders.next();
-        } else {
-          folder = DriveApp.createFolder("KolekPro_Photos");
-        }
-
-        var blob = Utilities.newBlob(Utilities.base64Decode(data.thumbnailBase64), "image/jpeg", "KolekPro_" + new Date().getTime() + ".jpg");
-        var file = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        
-        driveLink = file.getUrl();
-        var fileId = file.getId();
-        var directImageUrl = "https://drive.google.com/uc?export=view&id=" + fileId;
-        imageFormula = '=IMAGE("' + directImageUrl + '")';
-        
-        var newRow = sheet.getLastRow() + 1;
-        sheet.setRowHeight(newRow, 90);
-      } catch (imgErr) {
-        imageFormula = "Gagal upload gambar: " + imgErr.toString();
-      }
-    }
-
-    sheet.appendRow([
-      time,
-      date,
-      tag,
-      address,
-      lat,
-      lon,
-      status,
-      integrityHash,
-      note,
-      imageFormula,
-      driveLink
-    ]);
-
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "success",
-      "row": sheet.getLastRow(),
-      "message": "Data dan foto berhasil direkam di Google Sheets & Drive"
-    })).setMimeType(ContentService.MimeType.JSON);
-
+    sheet.appendRow([data.timestamp, data.address, data.latitude, data.longitude, data.status]);
+    return ContentService.createTextOutput(JSON.stringify({"status":"success"})).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      "status": "error",
-      "message": err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status":"error"})).setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-function doGet(e) {
-  return ContentService.createTextOutput("KolekPro Cam Google Sheets & Drive Webhook Aktif dan Siap Digunakan!");
 }
             """.trimIndent()
         }

@@ -1,617 +1,346 @@
 package com.example.ui.screens
 
 import android.graphics.BitmapFactory
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.PhotoLibrary
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.example.MainViewModel
 import com.example.data.PhotoRecord
-import com.example.util.StorageHelper
-import kotlinx.coroutines.launch
 import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GalleryScreen(
     viewModel: MainViewModel,
-    photos: List<PhotoRecord>,
-    modifier: Modifier = Modifier
+    onNavigateBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    BackHandler {
+        onNavigateBack()
+    }
 
-    var filterStatus by remember { mutableStateOf("ALL") } // "ALL", "PENDING", "SYNCED"
+    val photos by viewModel.allPhotos.collectAsState()
     var selectedPhoto by remember { mutableStateOf<PhotoRecord?>(null) }
-    var photoToDelete by remember { mutableStateOf<PhotoRecord?>(null) }
-    var isSyncingAll by remember { mutableStateOf(false) }
-
-    val filteredList = remember(photos, filterStatus) {
-        when (filterStatus) {
-            "PENDING" -> photos.filter { it.syncStatus != PhotoRecord.SYNC_STATUS_SYNCED }
-            "SYNCED" -> photos.filter { it.syncStatus == PhotoRecord.SYNC_STATUS_SYNCED }
-            else -> photos
-        }
-    }
-
-    val pendingCount = remember(photos) {
-        photos.count { it.syncStatus != PhotoRecord.SYNC_STATUS_SYNCED }
-    }
+    var syncStatusMessage by remember { mutableStateOf<String?>(null) }
+    var isSyncing by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("Riwayat Foto Watermark", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text(
-                            "${photos.size} foto tersimpan • $pendingCount antrean sinkron",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text(
+                        "Galeri Verifikasi (${photos.size})",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.testTag("btn_gallery_back")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Kembali ke Kamera",
+                            tint = Color.White
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                actions = {
-                    if (pendingCount > 0) {
-                        IconButton(
-                            onClick = {
-                                isSyncingAll = true
-                                viewModel.syncAllPendingPhotos { success, failed ->
-                                    isSyncingAll = false
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar("Sinkronisasi: $success berhasil, $failed gagal")
-                                    }
-                                }
-                            },
-                            enabled = !isSyncingAll,
-                            modifier = Modifier.testTag("btn_sync_all_top")
-                        ) {
-                            if (isSyncingAll) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(Icons.Default.Sync, contentDescription = "Sinkronkan Semua")
-                            }
-                        }
-                    }
-                }
+                    containerColor = Color(0xFF0F172A)
+                )
             )
         },
-        floatingActionButton = {
-            if (pendingCount > 0) {
-                FloatingActionButton(
-                    onClick = {
-                        isSyncingAll = true
-                        viewModel.syncAllPendingPhotos { success, failed ->
-                            isSyncingAll = false
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Sinkronisasi: $success berhasil, $failed gagal")
-                            }
-                        }
-                    },
-                    containerColor = Color(0xFF0D9488),
-                    contentColor = Color.White,
-                    modifier = Modifier.testTag("fab_sync_pending")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (isSyncingAll) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(Icons.Default.CloudUpload, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sinkronkan ($pendingCount)", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        modifier = modifier.fillMaxSize()
-    ) { padding ->
-        Column(
+        containerColor = Color(0xFF0F172A)
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(innerPadding)
         ) {
-            // FILTER CHIPS
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = filterStatus == "ALL",
-                    onClick = { filterStatus = "ALL" },
-                    label = { Text("Semua (${photos.size})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                )
-                FilterChip(
-                    selected = filterStatus == "PENDING",
-                    onClick = { filterStatus = "PENDING" },
-                    label = { Text("Antrean ($pendingCount)") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFFEF3C7)
-                    )
-                )
-                FilterChip(
-                    selected = filterStatus == "SYNCED",
-                    onClick = { filterStatus = "SYNCED" },
-                    label = { Text("Tersinkron (${photos.size - pendingCount})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = Color(0xFFD1FAE5)
-                    )
-                )
-            }
-
-            if (filteredList.isEmpty()) {
-                Box(
+            if (photos.isEmpty()) {
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(32.dp),
-                    contentAlignment = Alignment.Center
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.PhotoLibrary,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = Color.LightGray
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = if (photos.isEmpty()) "Belum ada foto yang diambil" else "Tidak ada foto dalam kategori ini",
-                            color = Color.Gray,
-                            fontSize = 14.sp
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = "Belum ada foto",
+                        modifier = Modifier.size(64.dp),
+                        tint = Color(0xFF64748B)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Belum ada foto verifikasi tersimpan",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Ambil foto dengan watermark untuk melihat hasil di sini",
+                        color = Color(0xFF64748B),
+                        fontSize = 13.sp
+                    )
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(filteredList, key = { it.id }) { photo ->
-                        PhotoCardItem(
-                            photo = photo,
-                            onClick = { selectedPhoto = photo },
-                            onDelete = { photoToDelete = photo },
-                            onSync = { viewModel.syncSingleRecord(photo) }
-                        )
+                    items(photos, key = { it.id }) { photo ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedPhoto = photo }
+                                .testTag("photo_item_${photo.id}"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Thumbnail
+                                val file = File(photo.filePath)
+                                val bitmap = remember(photo.filePath) {
+                                    if (file.exists()) {
+                                        try {
+                                            BitmapFactory.decodeFile(file.absolutePath)
+                                        } catch (_: Exception) { null }
+                                    } else null
+                                }
+
+                                if (bitmap != null) {
+                                    Image(
+                                        bitmap = bitmap.asImageBitmap(),
+                                        contentDescription = "Foto ${photo.tagLabel}",
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF334155)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.BrokenImage,
+                                            contentDescription = "Gambar tidak tersedia",
+                                            tint = Color.Gray
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = photo.tagLabel,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = Color.White
+                                        )
+
+                                        // Badge sync
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(
+                                                    if (photo.isSynced) Color(0xFF065F46) else Color(0xFF854D0E)
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (photo.isSynced) "TERKIRIM" else "BELUM SYNC",
+                                                color = Color.White,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "${photo.formattedDate} • ${photo.formattedTime}",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF94A3B8)
+                                    )
+
+                                    if (photo.address.isNotEmpty()) {
+                                        Text(
+                                            text = photo.address,
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF64748B),
+                                            maxLines = 1
+                                        )
+                                    }
+
+                                    if (photo.note.isNotEmpty()) {
+                                        Text(
+                                            text = "Catatan: ${photo.note}",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF38BDF8),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        isSyncing = true
+                                        viewModel.manualSyncPhoto(photo) { success, msg ->
+                                            isSyncing = false
+                                            syncStatusMessage = msg
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("btn_sync_${photo.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudUpload,
+                                        contentDescription = "Sync to Google Sheets",
+                                        tint = if (photo.isSynced) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-    }
 
-    // DETAIL PHOTO DIALOG
-    selectedPhoto?.let { photo ->
-        PhotoDetailDialog(
-            photo = photo,
-            onDismiss = { selectedPhoto = null },
-            onShare = {
-                val file = File(photo.filePath)
-                if (file.exists()) {
-                    StorageHelper.shareImage(context, file)
-                }
-            },
-            onSync = {
-                viewModel.syncSingleRecord(photo)
-                selectedPhoto = null
-                scope.launch {
-                    snackbarHostState.showSnackbar("Sedang menyinkronkan data...")
-                }
-            }
-        )
-    }
-
-    // DELETE CONFIRMATION DIALOG
-    photoToDelete?.let { photo ->
-        AlertDialog(
-            onDismissRequest = { photoToDelete = null },
-            title = { Text("Hapus Foto?") },
-            text = { Text("Foto ini akan dihapus dari riwayat aplikasi.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deletePhoto(photo)
-                        photoToDelete = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
-                ) {
-                    Text("Hapus")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { photoToDelete = null }) {
-                    Text("Batal")
-                }
-            }
-        )
-    }
-}
-
-@Composable
-fun PhotoCardItem(
-    photo: PhotoRecord,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-    onSync: () -> Unit
-) {
-    val bitmap = remember(photo.filePath) {
-        try {
-            val file = File(photo.filePath)
-            if (file.exists()) {
-                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-                BitmapFactory.decodeFile(file.absolutePath, options)
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .testTag("photo_card_${photo.id}"),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Thumbnail
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Thumbnail",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.PhotoLibrary,
-                        contentDescription = null,
-                        tint = Color.Gray
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // Metadata Column
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${photo.formattedDate} • ${photo.formattedTime}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    // Sync Status Badge
-                    SyncStatusBadge(status = photo.syncStatus)
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = photo.address,
-                    fontSize = 11.5.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 14.sp
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Security pill & Camera device tag
-                    val isTampered = photo.isMockDetected || photo.isTimeManipulated
-                    val pillText = when {
-                        photo.isTimeManipulated && photo.isMockDetected -> "⚠️ Waktu & GPS Palsu"
-                        photo.isTimeManipulated -> "⚠️ Jam Manipulasi"
-                        photo.isMockDetected -> "⚠️ Fake GPS"
-                        else -> "🛡️ Asli Verif"
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = pillText,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isTampered) Color(0xFFDC2626) else Color(0xFF059669)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = " ${photo.cameraStyle.take(13)}",
-                            fontSize = 9.5.sp,
-                            color = Color(0xFF38BDF8),
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    if (photo.note.isNotBlank()) {
-                        Text(
-                            text = "Note: ${photo.note}",
-                            fontSize = 10.sp,
-                            color = Color.Gray,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SyncStatusBadge(status: String) {
-    val isSynced = status == PhotoRecord.SYNC_STATUS_SYNCED
-    val isPending = status == PhotoRecord.SYNC_STATUS_PENDING
-
-    val bgColor = when {
-        isSynced -> Color(0xFFD1FAE5)
-        isPending -> Color(0xFFFEF3C7)
-        else -> Color(0xFFFEE2E2)
-    }
-
-    val textColor = when {
-        isSynced -> Color(0xFF065F46)
-        isPending -> Color(0xFF92400E)
-        else -> Color(0xFF991B1B)
-    }
-
-    val text = when {
-        isSynced -> "Tersinkron"
-        isPending -> "Antrean"
-        else -> "Gagal"
-    }
-
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(bgColor)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(text = text, color = textColor, fontSize = 9.5.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-fun PhotoDetailDialog(
-    photo: PhotoRecord,
-    onDismiss: () -> Unit,
-    onShare: () -> Unit,
-    onSync: () -> Unit
-) {
-    val bitmap = remember(photo.filePath) {
-        try {
-            val file = File(photo.filePath)
-            if (file.exists()) {
-                BitmapFactory.decodeFile(file.absolutePath)
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Image
-                Box(
+            // Sync message toast snackbar
+            if (syncStatusMessage != null) {
+                Snackbar(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    action = {
+                        TextButton(onClick = { syncStatusMessage = null }) {
+                            Text("Tutup", color = Color(0xFF38BDF8))
+                        }
+                    }
                 ) {
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Detail Foto",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+                    Text(syncStatusMessage ?: "")
+                }
+            }
+
+            // Detail Photo Dialog
+            if (selectedPhoto != null) {
+                val photo = selectedPhoto!!
+                val file = File(photo.filePath)
+                val fullBitmap = remember(photo.filePath) {
+                    if (file.exists()) {
+                        try {
+                            BitmapFactory.decodeFile(file.absolutePath)
+                        } catch (_: Exception) { null }
+                    } else null
+                }
+
+                AlertDialog(
+                    onDismissRequest = { selectedPhoto = null },
+                    title = {
+                        Text(
+                            "${photo.tagLabel} (${photo.formattedDate})",
+                            color = Color.White
                         )
-                    } else {
-                        Text("Gambar tidak ditemukan", color = Color.White)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "${photo.tagLabel} • ${photo.formattedDate} ${photo.formattedTime}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (fullBitmap != null) {
+                                Image(
+                                    bitmap = fullBitmap.asImageBitmap(),
+                                    contentDescription = "Detail Foto",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(280.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                "Koordinat: ${photo.latitude}, ${photo.longitude}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Text(
+                                "Lokasi: ${photo.address}",
+                                fontSize = 12.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                            Text(
+                                "Token: ${photo.signatureToken} • Hash: ${photo.integrityHash.take(12)}...",
+                                fontSize = 11.sp,
+                                color = Color(0xFF38BDF8)
+                            )
+                            if (photo.note.isNotEmpty()) {
+                                Text(
+                                    "Catatan: ${photo.note}",
+                                    fontSize = 12.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                viewModel.manualSyncPhoto(photo) { _, msg ->
+                                    syncStatusMessage = msg
+                                }
+                                selectedPhoto = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                        ) {
+                            Text("Kirim ke Google Sheets")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.deletePhoto(photo.id)
+                                selectedPhoto = null
+                            }
+                        ) {
+                            Text("Hapus", color = Color(0xFFEF4444))
+                        }
+                    },
+                    containerColor = Color(0xFF1E293B)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = photo.address,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "GPS: ${photo.latitude}, ${photo.longitude}",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Hash: #${photo.signatureToken} (${photo.integrityHash.take(12)}...)",
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = Color.Gray
-                )
-                val detailSecText = when {
-                    photo.isTimeManipulated && photo.isMockDetected -> "⚠️ Waktu & GPS Palsu Terdeteksi"
-                    photo.isTimeManipulated -> "⚠️ Waktu Jam Perangkat Dimanipulasi"
-                    photo.isMockDetected -> "⚠️ Fake GPS Terdeteksi"
-                    else -> "🛡️ Waktu & Lokasi Asli Terverifikasi"
-                }
-                Text(
-                    text = detailSecText,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (photo.isMockDetected || photo.isTimeManipulated) Color(0xFFDC2626) else Color(0xFF059669)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Kamera:  ${photo.cameraStyle}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0284C7)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "• 24mm ƒ/1.78 ISO 50 (EXIF Apple)",
-                        fontSize = 10.sp,
-                        color = Color.Gray
-                    )
-                }
-
-                if (photo.note.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Catatan: ${photo.note}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Actions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onShare,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Bagikan", fontSize = 12.sp)
-                    }
-                    Button(
-                        onClick = onSync,
-                        modifier = Modifier.weight(1.3f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0D9488))
-                    ) {
-                        Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Kirim Ulang", fontSize = 12.sp)
-                    }
-                }
             }
         }
     }

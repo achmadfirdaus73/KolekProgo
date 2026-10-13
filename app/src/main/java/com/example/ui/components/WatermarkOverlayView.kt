@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -43,14 +42,12 @@ fun WatermarkOverlayView(
     val isTampered = isMock || isTimeFake
     val borderColor = if (isTampered) Color(0xB3EF4444) else Color(0x55FFFFFF)
 
-    // Outer card container with Map as transparent background texture
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .border(1.2.dp, borderColor, RoundedCornerShape(16.dp))
     ) {
-        // 1. Map background texture with clear visibility
         if (mapBitmap != null) {
             Image(
                 bitmap = mapBitmap.asImageBitmap(),
@@ -61,14 +58,12 @@ fun WatermarkOverlayView(
             )
         }
 
-        // 2. Dark translucent glass overlay for crystal-clear readability
         Box(
             modifier = Modifier
                 .matchParentSize()
                 .background(Color(0xA90F172A))
         )
 
-        // 3. Content layout
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -76,7 +71,6 @@ fun WatermarkOverlayView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // LEFT COLUMN: Tag, Clock, Date, Status Pill
             Column(
                 modifier = Modifier.width(108.dp),
                 verticalArrangement = Arrangement.Center
@@ -111,7 +105,6 @@ fun WatermarkOverlayView(
                     else -> "🛡️ ASLI TERVERIFIKASI"
                 }
 
-                // Mini Authenticity Badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
@@ -128,7 +121,6 @@ fun WatermarkOverlayView(
                 }
             }
 
-            // VERTICAL DIVIDER
             Box(
                 modifier = Modifier
                     .width(1.dp)
@@ -138,7 +130,6 @@ fun WatermarkOverlayView(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // MIDDLE COLUMN: Full Address, Coordinates, Crypto Token (Spans remaining width)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -146,7 +137,7 @@ fun WatermarkOverlayView(
                 verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = locationData.address.ifEmpty { "RWGV+G94, Jl. Cakung Drainase, RT.1/RW.9, Semper Tim., Cilincing, DKI Jakarta" },
+                    text = locationData.address.ifEmpty { "Jl. Raya No. 1, Jakarta, Indonesia" },
                     color = Color(0xFFF8FAFC),
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
